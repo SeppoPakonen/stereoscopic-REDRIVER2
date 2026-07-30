@@ -1,8 +1,6 @@
 #include "stereo.h"
 #include "../C/camera.h"
 #include "PsyX/PsyX_render.h"
-#include "stereo_profiler.h"
-#include "stereo_optimizer.h"
 #include <stdio.h>
 #include <stdlib.h>
 // GL functions available through PsyX_render.h and glad.h includes
@@ -79,15 +77,8 @@ void StereoCamera_Update(PLAYER *lp, STEREO_EYE eye)
     // Update stereo camera for the given eye
     // This is called before rendering each eye
 
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_RecordEvent(PROF_EVENT_CAMERA_CALC_START);
-    }
-
     if (gStereoMode == STEREO_DISABLED) {
         gCurrentStereoEye = STEREO_EYE_MONO;
-        if (g_stereo_profiling_enabled) {
-            StereoProfiler_RecordEvent(PROF_EVENT_CAMERA_CALC_END);
-        }
         return;
     }
 
@@ -111,10 +102,6 @@ void StereoCamera_Update(PLAYER *lp, STEREO_EYE eye)
         stereo_camera.right_eye_pos.vy = camera_position.vy;
         stereo_camera.right_eye_pos.vz = camera_position.vz;
         stereo_camera.right_eye_pos.pad = 0;
-    }
-
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_RecordEvent(PROF_EVENT_CAMERA_CALC_END);
     }
 }
 
@@ -268,114 +255,5 @@ void StereoScissor_Disable(void)
 
     if (gStereoDebugLog) {
         printf("StereoScissor_Disable\n");
-    }
-}
-
-// ============ Performance Profiling and Optimization Integration ============
-
-// Initialize profiling and optimization systems
-void StereoPerformance_Init(int enable_profiling, int enable_optimization)
-{
-    if (enable_profiling) {
-        // Initialize profiler with detailed mode and 10000 event capacity
-        StereoProfiler_Init(STEREO_PROF_DETAILED, 10000);
-    }
-
-    if (enable_optimization) {
-        // Enable all optimizations
-        int opt_flags = STEREO_OPT_MATRIX_CACHING |
-                       STEREO_OPT_SCISSOR_BATCHING |
-                       STEREO_OPT_CLEAR_REDUCTION |
-                       STEREO_OPT_VIEWPORT_CACHING |
-                       STEREO_OPT_SHADER_PRECOMP;
-        StereoOptimizer_Init(opt_flags);
-    }
-
-    printf("StereoPerformance: Initialized (profiling=%d, optimization=%d)\n",
-           enable_profiling, enable_optimization);
-}
-
-// Shutdown profiling and optimization systems
-void StereoPerformance_Shutdown(void)
-{
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_Shutdown();
-    }
-
-    if (g_optimizer_initialized) {
-        StereoOptimizer_Shutdown();
-    }
-
-    StereoDebug_Shutdown();
-    printf("StereoPerformance: Shutdown complete\n");
-}
-
-// Generate performance reports
-void StereoPerformance_GenerateReports(const char *base_path)
-{
-    if (g_stereo_profiling_enabled) {
-        char profiler_report[256];
-        snprintf(profiler_report, sizeof(profiler_report), "%s/stereo_profiler_report.txt", base_path);
-        StereoProfiler_GenerateReport(profiler_report);
-    }
-
-    printf("StereoPerformance: Reports generated at %s\n", base_path);
-}
-
-// Optimized viewport setting with caching
-void StereoRender_SetViewPortOptimized(int x, int y, int width, int height)
-{
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_RecordEvent(PROF_EVENT_VIEWPORT_SET_START);
-    }
-
-    // Check if we can skip this viewport call
-    if (!StereoOptimizer_SetViewportCached(x, y, width, height)) {
-        GR_SetViewPort(x, y, width, height);
-    }
-
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_RecordEvent(PROF_EVENT_VIEWPORT_SET_END);
-    }
-}
-
-// Optimized clear operation
-void StereoRender_ClearOptimized(int x, int y, int w, int h, int r, int g, int b)
-{
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_RecordEvent(PROF_EVENT_CLEAR_START);
-    }
-
-    // Check if we should skip clear
-    if (!StereoOptimizer_ShouldSkipClear(gStereoMode)) {
-        GR_Clear(x, y, w, h, r, g, b);
-    }
-
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_RecordEvent(PROF_EVENT_CLEAR_END);
-    }
-}
-
-// Start frame profiling
-void StereoRender_ProfileFrameStart(void)
-{
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_StartFrame();
-    }
-}
-
-// End frame profiling
-void StereoRender_ProfileFrameEnd(void)
-{
-    if (g_stereo_profiling_enabled) {
-        StereoProfiler_EndFrame();
-    }
-}
-
-// Get current performance metrics
-void StereoRender_GetPerformanceMetrics(STEREO_FRAME_STATS *out_stats)
-{
-    if (out_stats && g_stereo_profiling_enabled) {
-        StereoProfiler_GetAverageStats(out_stats);
     }
 }

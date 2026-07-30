@@ -5,11 +5,8 @@
 #include "PsyX/PsyX_render.h"
 
 // OpenGL includes for framebuffer and VAO operations
-#if defined(USE_OPENGL)
-#if defined(USE_GLAD)
-#include "common/glad.h"
-#endif
-#endif
+// (Optional - only if using OpenGL FBO rendering)
+// #include <GL/glad.h>  // Requires explicit OpenGL configuration
 
 // Global compositor state
 static STEREO_COMPOSITOR g_compositor;
