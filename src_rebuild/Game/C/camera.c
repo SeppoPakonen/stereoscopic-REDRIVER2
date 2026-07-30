@@ -18,6 +18,7 @@
 #include "cell.h"
 #include "models.h"
 #include "map.h"
+#include "../render/stereo.h"
 #include "pedest.h"
 #include "cell.h"
 
@@ -184,6 +185,11 @@ void InitCamera(PLAYER *lp)
 		CameraCar = lp->cameraCarId;
 
 		lp->snd_cam_ang = camera_angle.vy;
+
+		// Initialize stereo camera system
+		if (gStereoMode != STEREO_DISABLED) {
+			StereoCamera_Init();
+		}
 	}
 	else 
 	{

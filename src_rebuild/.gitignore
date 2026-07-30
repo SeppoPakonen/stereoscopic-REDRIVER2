@@ -29,6 +29,8 @@ premake5*
 release_dist/
 tmp/
 
+# Plan directory is intentionally tracked (design docs)
+
 # System
 .DS_Store
 Thumbs.db

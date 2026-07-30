@@ -35,6 +35,8 @@
 #include "civ_ai.h"
 #include "cop_ai.h"
 #include "camera.h"
+#include "../render/stereo.h"
+#include "../render/stereo_compositor.h"
 #include "overlay.h"
 #include "debris.h"
 #include "job_fx.h"
@@ -1606,7 +1608,51 @@ int ObjectDrawnValue = 0;
 // [D] [T]
 void DrawGame(void)
 {
-	if (NumPlayers == 1 || NoPlayerControl)
+	// Stereo rendering path: render scene twice (left and right eye) when stereo is enabled
+	if (gStereoMode != STEREO_DISABLED && NumPlayers == 1)
+	{
+		if (gStereoDebugLog) {
+			printf("DrawGame: stereo rendering, mode=%d\n", gStereoMode);
+		}
+
+		ObjectDrawnValue = FrameCnt;
+		DrawPauseMenus();
+
+		// Initialize compositor if not already done
+		int screenW = 320, screenH = 240;
+#ifndef PSX
+		PsyX_GetScreenSize(&screenW, &screenH);
+#endif
+		static int compositor_initialized = 0;
+		if (!compositor_initialized) {
+			StereoCompositor_Init(screenW, screenH);
+			compositor_initialized = 1;
+		}
+
+		// Render left eye
+		if (gStereoDebugLog) {
+			printf("DrawGame: rendering left eye\n");
+		}
+		StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+		RenderGame2(0);
+
+		// Render right eye (could render to texture or apply tint)
+		if (gStereoDebugLog) {
+			printf("DrawGame: rendering right eye\n");
+		}
+		StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+		RenderGame2(0);
+
+		// Composite the two eye renders based on stereo mode
+		if (gStereoDebugLog) {
+			printf("DrawGame: compositing stereo images\n");
+		}
+		StereoCompositor_Composite(gStereoMode);
+
+		SwapDrawBuffers();
+	}
+	// Non-stereo rendering paths (original behavior)
+	else if (NumPlayers == 1 || NoPlayerControl)
 	{
 		ObjectDrawnValue = FrameCnt;
 		DrawPauseMenus();
@@ -1623,7 +1669,7 @@ void DrawGame(void)
 		ObjectDrawnValue += 16;
 
 		DrawPauseMenus();
-		
+
 		RenderGame2(1);
 		SwapDrawBuffers2(1);
 	}
@@ -2222,6 +2268,11 @@ void RenderGame2(int view)
 
 	CurrentPlayerView = view;
 	InitCamera(&player[view]);
+
+	// Apply stereo camera offset if in stereo mode
+	if (gStereoMode != STEREO_DISABLED) {
+		StereoCamera_ApplyToRender(gCurrentStereoEye);
+	}
 
 #ifndef PSX
 	int screenW, screenH;

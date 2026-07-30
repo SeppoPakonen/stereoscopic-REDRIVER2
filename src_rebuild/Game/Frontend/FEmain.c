@@ -1,6 +1,7 @@
 #include "driver2.h"
 
 #include "FEmain.h"
+#include "../render/stereo.h"
 
 #include "C/cd_icon.h"
 
@@ -379,6 +380,9 @@ int UserReplaySelectScreen(int bSetup);
 int TimeOfDaySelectScreen(int bSetup);
 int DemoScreen(int bSetup);
 int MiniCarsOnOffScreen(int bSetup);
+int StereoOptionsScreen(int bSetup);
+int StereoModeScreen(int bSetup);
+int StereoEyeSwapScreen(int bSetup);
 
 screenFunc fpUserFunctions[] = {
 	CentreScreen,
@@ -404,7 +408,10 @@ screenFunc fpUserFunctions[] = {
 	UserReplaySelectScreen,
 	TimeOfDaySelectScreen,
 	DemoScreen,
-	MiniCarsOnOffScreen
+	MiniCarsOnOffScreen,
+	StereoOptionsScreen,
+	StereoModeScreen,
+	StereoEyeSwapScreen
 };
 
 char* gfxNames[4] = {
@@ -3827,6 +3834,97 @@ int MiniCarsOnOffScreen(int bSetup)
 			pCurrButton = pCurrScreen->buttons;
 
 		return 1;
+	}
+	return 0;
+}
+
+// Stereo Options screen handler
+int StereoOptionsScreen(int bSetup)
+{
+	if (bSetup)
+	{
+		// Initialize to first button
+		pCurrButton = pCurrScreen->buttons;
+		return 1;
+	}
+	return 0;
+}
+
+// Stereo Mode selector handler (radio button style)
+int StereoModeScreen(int bSetup)
+{
+	if (bSetup)
+	{
+		// Position cursor based on current stereo mode
+		if (gStereoMode >= 0 && gStereoMode < 3)
+			currSelIndex = gStereoMode;
+		else
+			currSelIndex = 0;
+		pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		return 1;
+	}
+
+	if (feNewPad & MPAD_CROSS)
+	{
+		// Save selected mode
+		gStereoMode = (STEREO_MODE)currSelIndex;
+		if (gStereoDebugLog) {
+			printf("StereoModeScreen: selected mode %d\n", gStereoMode);
+		}
+	}
+	else if (feNewPad & MPAD_D_UP)
+	{
+		if (currSelIndex > 0)
+		{
+			currSelIndex--;
+			pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		}
+	}
+	else if (feNewPad & MPAD_D_DOWN)
+	{
+		if (currSelIndex < (pCurrScreen->numButtons - 2))  // -2 for back button
+		{
+			currSelIndex++;
+			pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		}
+	}
+	return 0;
+}
+
+// Stereo Eye Swap toggle handler
+int StereoEyeSwapScreen(int bSetup)
+{
+	if (bSetup)
+	{
+		// Position cursor based on current swap state (0=Off, 1=On)
+		currSelIndex = (gStereoSwapEyes == 0) ? 1 : 0;  // "Off" is button 1, "On" is button 0
+		pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		return 1;
+	}
+
+	if (feNewPad & MPAD_CROSS)
+	{
+		// Toggle swap based on selection
+		gStereoSwapEyes = (currSelIndex == 0) ? 1 : 0;
+		if (gStereoDebugLog) {
+			printf("StereoEyeSwapScreen: swap eyes %d\n", gStereoSwapEyes);
+		}
+	}
+	else if (feNewPad & MPAD_D_UP)
+	{
+		if (currSelIndex > 0)
+		{
+			currSelIndex--;
+			pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		}
+	}
+	else if (feNewPad & MPAD_D_DOWN)
+	{
+		if (currSelIndex < (pCurrScreen->numButtons - 1))
+		{
+			currSelIndex++;
+			pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		}
 	}
 	return 0;
 }

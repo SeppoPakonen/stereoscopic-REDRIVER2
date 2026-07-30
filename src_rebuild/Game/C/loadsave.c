@@ -12,6 +12,7 @@
 #include "pres.h"
 #include "pause.h"
 #include "platform.h"
+#include "../render/stereo.h"
 
 #ifndef PSX
 #include <stdlib.h>		// getenv
@@ -45,7 +46,13 @@ struct CONFIG_SAVE_HEADER
 	int NTSCAdjustY;
 	int gSubtitles;
 	ACTIVE_CHEATS AvailableCheats;
-	int reserved[6];
+	// Stereo rendering settings (Phase 1)
+	int stereo_mode;		// STEREO_MODE enum
+	int stereo_swap_eyes;	// 0=normal, 1=swapped
+	int stereo_debug_log;	// 0=off, 1=on
+	int stereo_separation_x100;	// Separation value * 100 (preserves 2 decimals)
+	// Reserved for future use
+	int reserved[2];
 };
 
 // [A]
@@ -461,6 +468,12 @@ int SaveConfigData(char* buffer)
 
 	header->ScoreTables = ScoreTables;
 
+	// Save stereo settings
+	header->stereo_mode = gStereoMode;
+	header->stereo_swap_eyes = gStereoSwapEyes;
+	header->stereo_debug_log = gStereoDebugLog;
+	header->stereo_separation_x100 = (int)(gStereoSeparation * 100.0f);
+
 	return sizeof(CONFIG_SAVE_HEADER);
 }
 
@@ -491,6 +504,12 @@ int LoadConfigData(char* buffer)
 	Pads[1].mappings = header->PadMapping[1];
 
 	ScoreTables = header->ScoreTables;
+
+	// Load stereo settings
+	gStereoMode = (STEREO_MODE)header->stereo_mode;
+	gStereoSwapEyes = header->stereo_swap_eyes;
+	gStereoDebugLog = header->stereo_debug_log;
+	gStereoSeparation = (float)header->stereo_separation_x100 / 100.0f;
 
 	return 1;
 }
