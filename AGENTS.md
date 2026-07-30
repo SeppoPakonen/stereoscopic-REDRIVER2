@@ -15,17 +15,29 @@ The Launcher is a separate U++ application located in `src/Launcher/` directory.
 
 ## Building the Launcher
 
-### Quick Build Command
+### Build Commands
 
 From the repository root (`I:\Dev\stereoscopic-REDRIVER2`):
+
+#### 64-bit Build (MSVS22x64)
 
 ```bash
 C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m MSVS22x64 -r Launcher
 ```
 
+Runtime dependency: `C:\Users\sblo\upp\bin\SDL2\lib\x64\SDL2.dll`
+
+#### 32-bit Build (CLANG)
+
+```bash
+C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m CLANG -r Launcher
+```
+
+Runtime dependency: `C:\Users\sblo\upp\bin\SDL2\lib\x86\SDL2.dll`
+
 **Parameters Explained:**
 - `--source-roots ".;C:\Users\sblo\upp"` - Source paths for U++ packages (local + ai-upp installation)
-- `-m MSVS22x64` - Build method (Visual Studio 2022, 64-bit)
+- `-m MSVS22x64` or `-m CLANG` - Build method (Visual Studio 2022 64-bit or CLANG 32-bit)
 - `-r` - Release mode (optimized build)
 - `Launcher` - Package name to build
 
@@ -33,7 +45,7 @@ C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m M
 
 - Executable location: `I:\Dev\stereoscopic-REDRIVER2\bin\Launcher.exe`
 - Size: ~3.0 MB
-- Build time: ~5-6 seconds
+- Build time: ~5-6 seconds per version
 
 ## Launcher Features (Phase 3)
 
@@ -93,17 +105,37 @@ If `C:\Users\sblo\Dev\ai-upp\bin\build.exe` doesn't exist:
 
 To create a release zip with both Launcher and game:
 
+### 64-bit Release
+
 ```powershell
-$releaseDir = "release_phase3"
+$releaseDir = "release_phase3_x64"
 mkdir $releaseDir
 cp "bin/Launcher.exe" $releaseDir/
 cp "src_rebuild/bin/Release/REDRIVER2.exe" $releaseDir/
-Compress-Archive -Path "$releaseDir/*" -DestinationPath "REDRIVER2_Phase3_Release.zip"
+cp "C:\Users\sblo\upp\bin\SDL2\lib\x64\SDL2.dll" $releaseDir/
+Compress-Archive -Path "$releaseDir/*" -DestinationPath "REDRIVER2_Phase3_Release_x64.zip"
 ```
 
-Result: `REDRIVER2_Phase3_Release.zip` (~1.8 MB) containing:
+### 32-bit Release
+
+```powershell
+# Rebuild with: C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m CLANG -r Launcher
+$releaseDir = "release_phase3_x86"
+mkdir $releaseDir
+cp "bin/Launcher.exe" $releaseDir/
+cp "src_rebuild/bin/Release/REDRIVER2.exe" $releaseDir/
+cp "C:\Users\sblo\upp\bin\SDL2\lib\x86\SDL2.dll" $releaseDir/
+Compress-Archive -Path "$releaseDir/*" -DestinationPath "REDRIVER2_Phase3_Release_x86.zip"
+```
+
+Result files:
+- `REDRIVER2_Phase3_Release_x64.zip` (~2.4 MB) - 64-bit build
+- `REDRIVER2_Phase3_Release_x86.zip` (~2.4 MB) - 32-bit build
+
+Each contains:
 - `Launcher.exe` (3.0 MB) - GUI launcher with stereo settings
 - `REDRIVER2.exe` (0.8 MB) - Game executable
+- `SDL2.dll` (1.5 MB) - Runtime dependency
 
 ## Related Components
 
