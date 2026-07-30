@@ -15,11 +15,25 @@ The Launcher is a separate U++ application located in `src/Launcher/` directory.
 
 ## Building the Launcher
 
+### Important: Architecture Matching
+
+**Both Launcher.exe and REDRIVER2.exe must be the same architecture (32-bit or 64-bit) if placed in the same directory**, because they share the SDL2.dll runtime library. A 32-bit executable cannot load a 64-bit DLL and vice versa.
+
+**Current setup**: REDRIVER2.exe is 32-bit, so Launcher must also be built as 32-bit.
+
 ### Build Commands
 
 From the repository root (`I:\Dev\stereoscopic-REDRIVER2`):
 
-#### 64-bit Build (MSVS22x64)
+#### Recommended: 32-bit Build (matches REDRIVER2.exe)
+
+```bash
+C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m CLANG -r Launcher
+```
+
+Runtime dependency: `C:\Users\sblo\upp\bin\SDL2\lib\x86\SDL2.dll`
+
+#### Alternative: 64-bit Build (requires 64-bit REDRIVER2.exe)
 
 ```bash
 C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m MSVS22x64 -r Launcher
@@ -27,13 +41,7 @@ C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m M
 
 Runtime dependency: `C:\Users\sblo\upp\bin\SDL2\lib\x64\SDL2.dll`
 
-#### 32-bit Build (CLANG)
-
-```bash
-C:\Users\sblo\Dev\ai-upp\bin\build.exe --source-roots ".;C:\Users\sblo\upp" -m CLANG -r Launcher
-```
-
-Runtime dependency: `C:\Users\sblo\upp\bin\SDL2\lib\x86\SDL2.dll`
+**Note**: Only use 64-bit build if REDRIVER2.exe is also rebuilt as 64-bit, and place them in separate directories or ensure only one SDL2.dll version is present.
 
 **Parameters Explained:**
 - `--source-roots ".;C:\Users\sblo\upp"` - Source paths for U++ packages (local + ai-upp installation)
