@@ -1,0 +1,42 @@
+# Build directories
+build/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# Dependencies
+dependencies/
+premake5*
+
+# Compiled files
+*.obj
+*.o
+*.lib
+*.exp
+*.a
+*.so
+*.dll
+*.exe
+*.pdb
+
+# IDE
+.vs/
+.vscode/
+*.code-workspace
+
+# Release distribution
+release_dist/
+tmp/
+
+# System
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
