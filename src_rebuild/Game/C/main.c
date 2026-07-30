@@ -37,6 +37,7 @@
 #include "camera.h"
 #include "../render/stereo.h"
 #include "../render/stereo_compositor.h"
+#include "PsyX/PsyX_render.h"
 #include "overlay.h"
 #include "debris.h"
 #include "job_fx.h"
@@ -1629,25 +1630,71 @@ void DrawGame(void)
 			compositor_initialized = 1;
 		}
 
-		// Render left eye
-		if (gStereoDebugLog) {
-			printf("DrawGame: rendering left eye\n");
-		}
-		StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
-		RenderGame2(0);
+		// Handle different stereo modes
+		if (gStereoMode == STEREO_SIDEBYSIDE)
+		{
+			// Side-by-Side: left eye on left half, right eye on right half
+			if (gStereoDebugLog) {
+				printf("DrawGame: side-by-side rendering\n");
+			}
 
-		// Render right eye (could render to texture or apply tint)
-		if (gStereoDebugLog) {
-			printf("DrawGame: rendering right eye\n");
-		}
-		StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
-		RenderGame2(0);
+			// Clear screen once
+			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
 
-		// Composite the two eye renders based on stereo mode
-		if (gStereoDebugLog) {
-			printf("DrawGame: compositing stereo images\n");
+			// Render left eye to left half
+			GR_SetViewPort(0, 0, screenW / 2, screenH);
+			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+			RenderGame2(0);
+
+			// Render right eye to right half
+			GR_SetViewPort(screenW / 2, 0, screenW / 2, screenH);
+			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+			RenderGame2(0);
+
+			// Reset viewport
+			GR_SetViewPort(0, 0, screenW, screenH);
 		}
-		StereoCompositor_Composite(gStereoMode);
+		else if (gStereoMode == STEREO_TOPBOTTOM)
+		{
+			// Top-Bottom: left eye on top half, right eye on bottom half
+			if (gStereoDebugLog) {
+				printf("DrawGame: top-bottom rendering\n");
+			}
+
+			// Clear screen once
+			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
+
+			// Render left eye to top half
+			GR_SetViewPort(0, 0, screenW, screenH / 2);
+			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+			RenderGame2(0);
+
+			// Render right eye to bottom half
+			GR_SetViewPort(0, screenH / 2, screenW, screenH / 2);
+			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+			RenderGame2(0);
+
+			// Reset viewport
+			GR_SetViewPort(0, 0, screenW, screenH);
+		}
+		else
+		{
+			// Anaglyph modes: render both to full screen
+			if (gStereoDebugLog) {
+				printf("DrawGame: anaglyph rendering\n");
+			}
+
+			// Render left eye
+			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+			RenderGame2(0);
+
+			// Render right eye (composited on top)
+			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+			RenderGame2(0);
+
+			// Apply anaglyph composition
+			StereoCompositor_Composite(gStereoMode);
+		}
 
 		SwapDrawBuffers();
 	}

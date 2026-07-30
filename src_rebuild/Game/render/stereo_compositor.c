@@ -8,6 +8,7 @@
 static STEREO_COMPOSITOR g_compositor;
 static int g_compositor_initialized = 0;
 static RECT16 g_eye_render_region;
+static uintptr_t g_anaglyph_fullcolor_shader = 0;
 
 // Anaglyph shader sources (GLSL)
 static const char* g_anaglyph_simple_shader_source =
@@ -20,6 +21,25 @@ static const char* g_anaglyph_simple_shader_source =
     "    vec4 right = texture2D(rightEyeTexture, v_texcoord);\n"
     "    // Simple red-cyan anaglyph: left R channel, right G+B channels\n"
     "    gl_FragColor = vec4(left.r, right.g, right.b, 1.0);\n"
+    "}\n";
+
+static const char* g_anaglyph_fullcolor_shader_source =
+    "#version 120\n"
+    "uniform sampler2D leftEyeTexture;\n"
+    "uniform sampler2D rightEyeTexture;\n"
+    "varying vec2 v_texcoord;\n"
+    "void main() {\n"
+    "    vec4 left = texture2D(leftEyeTexture, v_texcoord);\n"
+    "    vec4 right = texture2D(rightEyeTexture, v_texcoord);\n"
+    "    // Full-color anaglyph using improved color matrix\n"
+    "    // Left eye contributes primarily to red channel\n"
+    "    // Right eye contributes to green and blue channels with some red spillover for better color\n"
+    "    float left_lum = dot(left.rgb, vec3(0.3, 0.59, 0.11));\n"
+    "    float right_lum = dot(right.rgb, vec3(0.3, 0.59, 0.11));\n"
+    "    vec3 result = vec3(left.r * 0.8, right.g * 0.9, right.b * 0.9);\n"
+    "    // Add slight color from the opposite eye for better color reproduction\n"
+    "    result += vec3(right_lum * 0.1, left_lum * 0.1, left_lum * 0.1);\n"
+    "    gl_FragColor = vec4(result, 1.0);\n"
     "}\n";
 
 static const char* g_sidebyside_shader_source =
@@ -58,8 +78,9 @@ void StereoCompositor_Init(int width, int height)
     g_compositor.left_eye_texture = GR_CreateRGBATexture(width, height, NULL);
     g_compositor.right_eye_texture = GR_CreateRGBATexture(width, height, NULL);
 
-    // Compile anaglyph shader
+    // Compile anaglyph shaders
     g_compositor.anaglyph_shader = GR_Shader_Compile(g_anaglyph_simple_shader_source, 0);
+    g_anaglyph_fullcolor_shader = GR_Shader_Compile(g_anaglyph_fullcolor_shader_source, 0);
 
     // Compile side-by-side shader
     g_compositor.sidebyside_shader = GR_Shader_Compile(g_sidebyside_shader_source, 0);
@@ -144,8 +165,10 @@ void StereoCompositor_Composite(STEREO_MODE mode)
     uintptr_t shader = 0;
     switch (mode) {
         case STEREO_ANAGLYPH_SIMPLE:
-        case STEREO_ANAGLYPH_FULLCOLOR:
             shader = g_compositor.anaglyph_shader;
+            break;
+        case STEREO_ANAGLYPH_FULLCOLOR:
+            shader = g_anaglyph_fullcolor_shader;
             break;
         case STEREO_SIDEBYSIDE:
             shader = g_compositor.sidebyside_shader;
