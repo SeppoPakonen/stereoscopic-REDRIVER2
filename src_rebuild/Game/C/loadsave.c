@@ -51,8 +51,10 @@ struct CONFIG_SAVE_HEADER
 	int stereo_swap_eyes;	// 0=normal, 1=swapped
 	int stereo_debug_log;	// 0=off, 1=on
 	int stereo_separation_x100;	// Separation value * 100 (preserves 2 decimals)
+	// Stereo rendering settings (Phase 3)
+	int stereo_convergence_x100;	// Convergence distance value * 100 (preserves 2 decimals)
 	// Reserved for future use
-	int reserved[2];
+	int reserved[1];
 };
 
 // [A]
@@ -473,6 +475,7 @@ int SaveConfigData(char* buffer)
 	header->stereo_swap_eyes = gStereoSwapEyes;
 	header->stereo_debug_log = gStereoDebugLog;
 	header->stereo_separation_x100 = (int)(gStereoSeparation * 100.0f);
+	header->stereo_convergence_x100 = (int)(gStereoConvergence * 100.0f);
 
 	return sizeof(CONFIG_SAVE_HEADER);
 }
@@ -510,6 +513,7 @@ int LoadConfigData(char* buffer)
 	gStereoSwapEyes = header->stereo_swap_eyes;
 	gStereoDebugLog = header->stereo_debug_log;
 	gStereoSeparation = (float)header->stereo_separation_x100 / 100.0f;
+	gStereoConvergence = (float)header->stereo_convergence_x100 / 100.0f;
 
 	return 1;
 }

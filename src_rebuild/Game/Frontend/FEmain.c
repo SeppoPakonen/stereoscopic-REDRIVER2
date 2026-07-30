@@ -383,6 +383,7 @@ int MiniCarsOnOffScreen(int bSetup);
 int StereoOptionsScreen(int bSetup);
 int StereoModeScreen(int bSetup);
 int StereoEyeSwapScreen(int bSetup);
+int StereoConvergenceScreen(int bSetup);
 
 screenFunc fpUserFunctions[] = {
 	CentreScreen,
@@ -411,7 +412,8 @@ screenFunc fpUserFunctions[] = {
 	MiniCarsOnOffScreen,
 	StereoOptionsScreen,
 	StereoModeScreen,
-	StereoEyeSwapScreen
+	StereoEyeSwapScreen,
+	StereoConvergenceScreen
 };
 
 char* gfxNames[4] = {
@@ -3856,7 +3858,7 @@ int StereoModeScreen(int bSetup)
 	if (bSetup)
 	{
 		// Position cursor based on current stereo mode
-		if (gStereoMode >= 0 && gStereoMode < 3)
+		if (gStereoMode >= 0 && gStereoMode < 8)
 			currSelIndex = gStereoMode;
 		else
 			currSelIndex = 0;
@@ -3926,6 +3928,156 @@ int StereoEyeSwapScreen(int bSetup)
 			pCurrButton = &pCurrScreen->buttons[currSelIndex];
 		}
 	}
+	return 0;
+}
+
+// Stereo Convergence Distance and Separation fine-tuning handler
+int StereoConvergenceScreen(int bSetup)
+{
+	char text[32];
+	int ypos[2] = { 200, 241 };
+
+	// Static storage for hold values in case user cancels
+	static float convergenceHold = 0.0f;
+	static float separationHold = 0.0f;
+
+	if (bSetup)
+	{
+		currSelIndex = 0;
+		convergenceHold = gStereoConvergence;
+		separationHold = gStereoSeparation;
+
+		if (gStereoDebugLog) {
+			printf("StereoConvergenceScreen: setup, convergence=%.2f, separation=%.2f\n",
+				   gStereoConvergence, gStereoSeparation);
+		}
+
+		return 0;
+	}
+
+#ifndef PSX
+	// Display current values
+	sprintf(text, "%.2f", gStereoConvergence);
+	FEPrintString(text, 200, ypos[0], 2, 128, 128, 128);
+
+	sprintf(text, "%.2f", gStereoSeparation);
+	FEPrintString(text, 200, ypos[1], 2, 128, 128, 128);
+#endif
+
+	// did we make any changes?
+	bool update = false;
+
+	currSelIndex = (pCurrButton->u & 3);
+
+	if (feNewPad & MPAD_TRIANGLE)
+	{
+		FESound(0);
+		bDoneAllready = 1;
+
+		// Restore previous values on cancel
+		gStereoConvergence = convergenceHold;
+		gStereoSeparation = separationHold;
+
+		if (gStereoDebugLog) {
+			printf("StereoConvergenceScreen: cancelled, restored convergence=%.2f, separation=%.2f\n",
+				   gStereoConvergence, gStereoSeparation);
+		}
+
+		return 0;
+	}
+	else if (feNewPad & MPAD_CROSS)
+	{
+		// Accept current settings - they're already applied
+		if (gStereoDebugLog) {
+			printf("StereoConvergenceScreen: accepted, convergence=%.2f, separation=%.2f\n",
+				   gStereoConvergence, gStereoSeparation);
+		}
+		return 0;
+	}
+	else if (feNewPad & MPAD_D_UP)
+	{
+		if (currSelIndex > 0)
+		{
+			currSelIndex--;
+			pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		}
+	}
+	else if (feNewPad & MPAD_D_DOWN)
+	{
+		if (currSelIndex < (pCurrScreen->numButtons - 1))
+		{
+			currSelIndex++;
+			pCurrButton = &pCurrScreen->buttons[currSelIndex];
+		}
+	}
+	else
+	{
+		// Handle LEFT/RIGHT for slider adjustment
+		if (fePad & MPAD_D_LEFT)
+		{
+			switch (currSelIndex)
+			{
+			case 0:  // Convergence slider
+				gStereoConvergence -= 0.5f;
+				if (gStereoConvergence < 0.5f)
+				{
+					gStereoConvergence = 0.5f;
+				}
+				else
+				{
+					update = true;
+				}
+				break;
+
+			case 1:  // Separation slider
+				gStereoSeparation -= 0.05f;
+				if (gStereoSeparation < 0.1f)
+				{
+					gStereoSeparation = 0.1f;
+				}
+				else
+				{
+					update = true;
+				}
+				break;
+			}
+		}
+		else if (fePad & MPAD_D_RIGHT)
+		{
+			switch (currSelIndex)
+			{
+			case 0:  // Convergence slider
+				gStereoConvergence += 0.5f;
+				if (gStereoConvergence > 100.0f)
+				{
+					gStereoConvergence = 100.0f;
+				}
+				else
+				{
+					update = true;
+				}
+				break;
+
+			case 1:  // Separation slider
+				gStereoSeparation += 0.05f;
+				if (gStereoSeparation > 3.0f)
+				{
+					gStereoSeparation = 3.0f;
+				}
+				else
+				{
+					update = true;
+				}
+				break;
+			}
+		}
+
+		if (update && gStereoDebugLog) {
+			printf("StereoConvergenceScreen: updated, convergence=%.2f, separation=%.2f\n",
+				   gStereoConvergence, gStereoSeparation);
+		}
+	}
+
 	return 0;
 }
 

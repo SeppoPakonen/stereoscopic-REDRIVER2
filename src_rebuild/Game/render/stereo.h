@@ -14,7 +14,9 @@ typedef enum {
     STEREO_ANAGLYPH_FULLCOLOR = 2,
     STEREO_SIDEBYSIDE = 3,
     STEREO_TOPBOTTOM = 4,
-    STEREO_INTERLACED = 5
+    STEREO_INTERLACED = 5,
+    STEREO_POLARIZED = 6,
+    STEREO_CHECKERBOARD = 7
 } STEREO_MODE;
 
 // Eye identifiers
@@ -65,5 +67,26 @@ void StereoDebug_Init(void);
 void StereoDebug_LogFrame(int frame_num);
 void StereoDebug_LogRenderPhase(const char *phase, STEREO_EYE eye);
 void StereoDebug_LogCameraUpdate(STEREO_EYE eye, VECTOR *pos);
+
+// Scissor test helpers for interlaced rendering
+// These functions help restrict rendering to specific scanlines
+void StereoScissor_SetOddScanlines(int screenHeight);
+void StereoScissor_SetEvenScanlines(int screenHeight);
+void StereoScissor_Disable(void);
+
+// Performance profiling and optimization
+// Include profiler header for STEREO_FRAME_STATS type
+#include "stereo_profiler.h"
+
+void StereoPerformance_Init(int enable_profiling, int enable_optimization);
+void StereoPerformance_Shutdown(void);
+void StereoPerformance_GenerateReports(const char *base_path);
+
+// Optimized rendering functions
+void StereoRender_SetViewPortOptimized(int x, int y, int width, int height);
+void StereoRender_ClearOptimized(int x, int y, int w, int h, int r, int g, int b);
+void StereoRender_ProfileFrameStart(void);
+void StereoRender_ProfileFrameEnd(void);
+void StereoRender_GetPerformanceMetrics(STEREO_FRAME_STATS *out_stats);
 
 #endif // STEREO_H

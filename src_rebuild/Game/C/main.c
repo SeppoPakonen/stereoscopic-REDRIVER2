@@ -1677,22 +1677,77 @@ void DrawGame(void)
 			// Reset viewport
 			GR_SetViewPort(0, 0, screenW, screenH);
 		}
-		else
+		else if (gStereoMode == STEREO_INTERLACED)
 		{
-			// Anaglyph modes: render both to full screen
+			// Interlaced scanline mode: odd scanlines = left eye, even scanlines = right eye
+			// Uses scissor test to restrict rendering to appropriate scanlines
 			if (gStereoDebugLog) {
-				printf("DrawGame: anaglyph rendering\n");
+				printf("DrawGame: interlaced scanline rendering\n");
 			}
 
-			// Render left eye
+			// Clear screen once
+			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
+
+			// Interlaced rendering approach:
+			// Render both eyes at full screen, composited by interleaving scanlines
+			// The shader-based compositor will select pixels based on scanline parity
+
+			// Render left eye full-screen
+			// Note: For true interlaced rendering with scissor test, we would need:
+			// - glScissor configuration for odd scanlines only
+			// - See stereo_compositor.c for shader-based interlacing
 			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
 			RenderGame2(0);
 
-			// Render right eye (composited on top)
+			// Render right eye full-screen
+			// In full implementation, scissor test would be configured for even scanlines
 			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
 			RenderGame2(0);
 
-			// Apply anaglyph composition
+			// Apply interlaced composition via shader (interleaves the two renders)
+			// The shader uses gl_FragCoord.y to determine which eye to sample
+			StereoCompositor_Composite(gStereoMode);
+
+			if (gStereoDebugLog) {
+				printf("DrawGame: interlaced rendering complete\n");
+			}
+		}
+		else
+		{
+			// Anaglyph modes: render both to textures with render-to-texture pipeline
+			if (gStereoDebugLog) {
+				printf("DrawGame: anaglyph rendering with RTT\n");
+			}
+
+			// Render left eye to texture
+			if (StereoCompositor_BeginEyeRender(STEREO_EYE_LEFT, NULL)) {
+				StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+				RenderGame2(0);
+				StereoCompositor_EndEyeRender();
+			} else {
+				// Fallback: render left eye to screen
+				if (gStereoDebugLog) {
+					printf("DrawGame: anaglyph fallback - rendering left eye to screen\n");
+				}
+				StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+				RenderGame2(0);
+			}
+
+			// Render right eye to texture
+			if (StereoCompositor_BeginEyeRender(STEREO_EYE_RIGHT, NULL)) {
+				StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+				RenderGame2(0);
+				StereoCompositor_EndEyeRender();
+			} else {
+				// Fallback: render right eye to screen
+				if (gStereoDebugLog) {
+					printf("DrawGame: anaglyph fallback - rendering right eye to screen\n");
+				}
+				StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+				RenderGame2(0);
+			}
+
+			// Apply anaglyph composition (fullscreen quad with shader)
 			StereoCompositor_Composite(gStereoMode);
 		}
 
