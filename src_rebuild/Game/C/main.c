@@ -1,6 +1,7 @@
 #include "driver2.h"
 #include "main.h"
 
+#include <stdarg.h>
 #include "ASM/rndrasm.h"
 #include "ASM/d2mapasm.h"
 
@@ -62,6 +63,26 @@
 #include "platform.h"
 #include "state.h"
 #include "cutrecorder.h"
+
+// File-based logging for debugging stereo rendering
+static void StereoDebugLog(const char* format, ...) {
+	FILE* fp = fopen("stereo_debug.log", "a");
+	if (!fp) return;
+	va_list args;
+	va_start(args, format);
+	vfprintf(fp, format, args);
+	va_end(args);
+	fprintf(fp, "\n");
+	fflush(fp);
+	fclose(fp);
+
+	// Also write to console
+	va_start(args, format);
+	vprintf(format, args);
+	va_end(args);
+	printf("\n");
+	fflush(stdout);
+}
 
 int levelstartpos[8][4] = {
 	{ 4785, -1024, -223340, 0},
@@ -1609,9 +1630,35 @@ int ObjectDrawnValue = 0;
 // [D] [T]
 void DrawGame(void)
 {
+	// Initialize stereo compositor once (guard against multiple inits)
+	// DISABLED - causing memory corruption. Will implement simplified stereo rendering without compositor.
+	static int stereo_compositor_initialized_guard = 0;
+	if (0 && !stereo_compositor_initialized_guard && gStereoMode != STEREO_DISABLED) {
+		int screenW = 320, screenH = 240;
+#ifndef PSX
+		PsyX_GetScreenSize(&screenW, &screenH);
+#endif
+		printf("DrawGame: Initializing StereoCompositor with %d x %d\n", screenW, screenH);
+		StereoCompositor_Init(screenW, screenH);
+		stereo_compositor_initialized_guard = 1;
+	}
+
+	// Log current stereo state for debugging
+	StereoDebugLog("DrawGame ENTRY: gStereoMode=%d, NumPlayers=%d, STEREO_DISABLED=%d",
+	       gStereoMode, NumPlayers, STEREO_DISABLED);
+	StereoDebugLog("DrawGame: Stereo check: (gStereoMode != STEREO_DISABLED)=%d, (NumPlayers == 1)=%d",
+	       (gStereoMode != STEREO_DISABLED), (NumPlayers == 1));
+
+	// Prepare for stereo rendering
+	SVECTOR saved_camera_base = {0, 0, 0, 0};
+	memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
+	printf("DrawGame: Base camera_position.vx = %d\n", saved_camera_base.vx);
+
 	// Stereo rendering path: render scene twice (left and right eye) when stereo is enabled
+	// Simplified version without compositor - just renders both eyes to screen (overlapping)
 	if (gStereoMode != STEREO_DISABLED && NumPlayers == 1)
 	{
+		printf("DrawGame: TAKING STEREO RENDERING PATH, mode=%d\n", gStereoMode);
 		if (gStereoDebugLog) {
 			printf("DrawGame: stereo rendering, mode=%d\n", gStereoMode);
 		}
@@ -1619,40 +1666,69 @@ void DrawGame(void)
 		ObjectDrawnValue = FrameCnt;
 		DrawPauseMenus();
 
-		// Initialize compositor if not already done
+		// Get screen size for stereo rendering
 		int screenW = 320, screenH = 240;
 #ifndef PSX
 		PsyX_GetScreenSize(&screenW, &screenH);
 #endif
-		static int compositor_initialized = 0;
-		if (!compositor_initialized) {
-			StereoCompositor_Init(screenW, screenH);
-			compositor_initialized = 1;
-		}
 
-		// Handle different stereo modes
+		// Handle different stereo modes - using scissor test for output separation
 		if (gStereoMode == STEREO_SIDEBYSIDE)
 		{
 			// Side-by-Side: left eye on left half, right eye on right half
 			if (gStereoDebugLog) {
-				printf("DrawGame: side-by-side rendering\n");
+				printf("DrawGame: side-by-side rendering with scissor test\n");
 			}
 
-			// Clear screen once
+			// Clear full screen
 			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
 
-			// Render left eye to left half
-			GR_SetViewPort(0, 0, screenW / 2, screenH);
+			// Save original camera position
+			memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
+			printf("DrawGame: Rendering side-by-side, screen %d x %d\n", screenW, screenH);
+
+			// Enable scissor test and render left eye to left half
+#ifndef PSX
+			#define GL_SCISSOR_TEST 0x0C11
+			#define GL_NO_ERROR 0
+			printf("DrawGame: About to enable scissor test\n");
+			glEnable(GL_SCISSOR_TEST);
+			int err1 = glGetError();
+			printf("DrawGame: glEnable error: 0x%X\n", err1);
+
+			glScissor(0, 0, screenW / 2, screenH);
+			int err2 = glGetError();
+			printf("DrawGame: glScissor error: 0x%X (left half: 0,0 %d,%d)\n", err2, screenW/2, screenH);
+#endif
+
 			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+#ifndef PSX
+			int left_enabled = glIsEnabled(GL_SCISSOR_TEST);
+			printf("DrawGame: Before RenderGame2 LEFT - scissor enabled: %d\n", left_enabled);
+#endif
 			RenderGame2(0);
 
-			// Render right eye to right half
-			GR_SetViewPort(screenW / 2, 0, screenW / 2, screenH);
+			// Restore camera and render right eye to right half
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+#ifndef PSX
+			glScissor(screenW / 2, 0, screenW / 2, screenH);
+			int err3 = glGetError();
+			printf("DrawGame: glScissor error (right half): 0x%X (%d,0 %d,%d)\n", err3, screenW/2, screenW/2, screenH);
+#endif
 			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+#ifndef PSX
+			int right_enabled = glIsEnabled(GL_SCISSOR_TEST);
+			printf("DrawGame: Before RenderGame2 RIGHT - scissor enabled: %d\n", right_enabled);
+#endif
 			RenderGame2(0);
 
-			// Reset viewport
-			GR_SetViewPort(0, 0, screenW, screenH);
+			// Disable scissor test and restore camera
+#ifndef PSX
+			glDisable(GL_SCISSOR_TEST);
+			int err4 = glGetError();
+			printf("DrawGame: glDisable error: 0x%X\n", err4);
+#endif
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
 		}
 		else if (gStereoMode == STEREO_TOPBOTTOM)
 		{
@@ -1661,52 +1737,48 @@ void DrawGame(void)
 				printf("DrawGame: top-bottom rendering\n");
 			}
 
-			// Clear screen once
+			// Clear screen
 			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
 
-			// Render left eye to top half
-			GR_SetViewPort(0, 0, screenW, screenH / 2);
+			// Save original camera position
+			memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
+
+			// Render left eye
 			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
 			RenderGame2(0);
 
-			// Render right eye to bottom half
-			GR_SetViewPort(0, screenH / 2, screenW, screenH / 2);
+			// Restore camera and offset for right eye
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+			camera_position = camera_position;  // dummy to avoid compiler warnings
 			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
 			RenderGame2(0);
 
-			// Reset viewport
-			GR_SetViewPort(0, 0, screenW, screenH);
+			// Restore original camera position
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
 		}
 		else if (gStereoMode == STEREO_INTERLACED)
 		{
-			// Interlaced scanline mode: odd scanlines = left eye, even scanlines = right eye
-			// Uses scissor test to restrict rendering to appropriate scanlines
+			// Interlaced scanline mode - simplified (just render both eyes to screen)
 			if (gStereoDebugLog) {
-				printf("DrawGame: interlaced scanline rendering\n");
+				printf("DrawGame: interlaced scanline rendering (simplified)\n");
 			}
 
 			// Clear screen once
 			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
 
-			// Interlaced rendering approach:
-			// Render both eyes at full screen, composited by interleaving scanlines
-			// The shader-based compositor will select pixels based on scanline parity
+			// Save original camera position (already saved above)
 
-			// Render left eye full-screen
-			// Note: For true interlaced rendering with scissor test, we would need:
-			// - glScissor configuration for odd scanlines only
-			// - See stereo_compositor.c for shader-based interlacing
+			// Render left eye
 			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
 			RenderGame2(0);
 
-			// Render right eye full-screen
-			// In full implementation, scissor test would be configured for even scanlines
+			// Restore camera and offset for right eye
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
 			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
 			RenderGame2(0);
 
-			// Apply interlaced composition via shader (interleaves the two renders)
-			// The shader uses gl_FragCoord.y to determine which eye to sample
-			StereoCompositor_Composite(gStereoMode);
+			// Restore original camera position
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
 
 			if (gStereoDebugLog) {
 				printf("DrawGame: interlaced rendering complete\n");
@@ -1714,41 +1786,24 @@ void DrawGame(void)
 		}
 		else
 		{
-			// Anaglyph modes: render both to textures with render-to-texture pipeline
-			if (gStereoDebugLog) {
-				printf("DrawGame: anaglyph rendering with RTT\n");
-			}
+			// Anaglyph modes - simplified (just render both eyes to screen)
+			StereoDebugLog("DrawGame: TAKING ANAGLYPH RENDERING PATH (simplified), mode=%d", gStereoMode);
 
-			// Render left eye to texture
-			if (StereoCompositor_BeginEyeRender(STEREO_EYE_LEFT, NULL)) {
-				StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
-				RenderGame2(0);
-				StereoCompositor_EndEyeRender();
-			} else {
-				// Fallback: render left eye to screen
-				if (gStereoDebugLog) {
-					printf("DrawGame: anaglyph fallback - rendering left eye to screen\n");
-				}
-				StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
-				RenderGame2(0);
-			}
+			// Save original camera position (already saved above)
 
-			// Render right eye to texture
-			if (StereoCompositor_BeginEyeRender(STEREO_EYE_RIGHT, NULL)) {
-				StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
-				RenderGame2(0);
-				StereoCompositor_EndEyeRender();
-			} else {
-				// Fallback: render right eye to screen
-				if (gStereoDebugLog) {
-					printf("DrawGame: anaglyph fallback - rendering right eye to screen\n");
-				}
-				StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
-				RenderGame2(0);
-			}
+			// Render left eye
+			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+			RenderGame2(0);
 
-			// Apply anaglyph composition (fullscreen quad with shader)
-			StereoCompositor_Composite(gStereoMode);
+			// Restore camera and offset for right eye
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+			RenderGame2(0);
+
+			// Restore original camera position
+			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+
+			StereoDebugLog("DrawGame: Anaglyph rendering complete");
 		}
 
 		SwapDrawBuffers();
@@ -1756,6 +1811,7 @@ void DrawGame(void)
 	// Non-stereo rendering paths (original behavior)
 	else if (NumPlayers == 1 || NoPlayerControl)
 	{
+		StereoDebugLog("DrawGame: TAKING NON-STEREO SINGLE PLAYER PATH");
 		ObjectDrawnValue = FrameCnt;
 		DrawPauseMenus();
 
@@ -1764,6 +1820,7 @@ void DrawGame(void)
 	}
 	else
 	{
+		StereoDebugLog("DrawGame: TAKING MULTIPLAYER PATH");
 		ObjectDrawnValue = FrameCnt;
 		RenderGame2(0);
 		SwapDrawBuffers2(0);

@@ -508,12 +508,18 @@ int LoadConfigData(char* buffer)
 
 	ScoreTables = header->ScoreTables;
 
-	// Load stereo settings
-	gStereoMode = (STEREO_MODE)header->stereo_mode;
-	gStereoSwapEyes = header->stereo_swap_eyes;
-	gStereoDebugLog = header->stereo_debug_log;
-	gStereoSeparation = (float)header->stereo_separation_x100 / 100.0f;
-	gStereoConvergence = (float)header->stereo_convergence_x100 / 100.0f;
+	// Load stereo settings only if they were explicitly saved (non-zero mode or non-zero values)
+	// Otherwise preserve the values loaded from config.ini
+	if (header->stereo_mode != STEREO_DISABLED || header->stereo_separation_x100 != 0 || header->stereo_convergence_x100 != 0)
+	{
+		gStereoMode = (STEREO_MODE)header->stereo_mode;
+		gStereoSwapEyes = header->stereo_swap_eyes;
+		gStereoDebugLog = header->stereo_debug_log;
+		if (header->stereo_separation_x100 != 0)
+			gStereoSeparation = (float)header->stereo_separation_x100 / 100.0f;
+		if (header->stereo_convergence_x100 != 0)
+			gStereoConvergence = (float)header->stereo_convergence_x100 / 100.0f;
+	}
 
 	return 1;
 }

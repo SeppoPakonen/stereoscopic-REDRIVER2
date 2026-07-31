@@ -15,160 +15,183 @@ static RECT16 g_eye_render_region;
 static STEREO_EYE g_current_render_eye = STEREO_EYE_MONO;
 static int g_in_eye_render = 0;
 
-// Anaglyph shader sources (GLSL)
+// Shader with vertex/fragment separation for PsyX
 static const char* g_anaglyph_simple_shader_source =
-    "#version 120\n"
+    "varying vec2 v_texcoord;\n"
+    "#ifdef VERTEX\n"
+    "attribute vec4 a_texcoord;\n"
+    "void main() {\n"
+    "    v_texcoord = a_texcoord.xy;\n"
+    "    gl_Position = vec4(0.0);\n"
+    "}\n"
+    "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
     "uniform sampler2D rightEyeTexture;\n"
-    "varying vec2 v_texcoord;\n"
     "void main() {\n"
     "    vec4 left = texture2D(leftEyeTexture, v_texcoord);\n"
     "    vec4 right = texture2D(rightEyeTexture, v_texcoord);\n"
-    "    // Simple red-cyan anaglyph: left R channel, right G+B channels\n"
-    "    gl_FragColor = vec4(left.r, right.g, right.b, 1.0);\n"
-    "}\n";
+    "    fragColor = vec4(left.r, right.g, right.b, 1.0);\n"
+    "}\n"
+    "#endif\n";
 
 static const char* g_anaglyph_fullcolor_shader_source =
-    "#version 120\n"
+    "varying vec2 v_texcoord;\n"
+    "#ifdef VERTEX\n"
+    "attribute vec4 a_texcoord;\n"
+    "void main() {\n"
+    "    v_texcoord = a_texcoord.xy;\n"
+    "    gl_Position = vec4(0.0);\n"
+    "}\n"
+    "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
     "uniform sampler2D rightEyeTexture;\n"
-    "varying vec2 v_texcoord;\n"
     "void main() {\n"
     "    vec4 left = texture2D(leftEyeTexture, v_texcoord);\n"
     "    vec4 right = texture2D(rightEyeTexture, v_texcoord);\n"
-    "    // Full-color anaglyph using improved color matrix\n"
-    "    // Left eye contributes primarily to red channel\n"
-    "    // Right eye contributes to green and blue channels with some red spillover for better color\n"
     "    float left_lum = dot(left.rgb, vec3(0.3, 0.59, 0.11));\n"
     "    float right_lum = dot(right.rgb, vec3(0.3, 0.59, 0.11));\n"
     "    vec3 result = vec3(left.r * 0.8, right.g * 0.9, right.b * 0.9);\n"
-    "    // Add slight color from the opposite eye for better color reproduction\n"
     "    result += vec3(right_lum * 0.1, left_lum * 0.1, left_lum * 0.1);\n"
-    "    gl_FragColor = vec4(result, 1.0);\n"
-    "}\n";
+    "    fragColor = vec4(result, 1.0);\n"
+    "}\n"
+    "#endif\n";
 
 static const char* g_sidebyside_shader_source =
-    "#version 120\n"
+    "varying vec2 v_texcoord;\n"
+    "#ifdef VERTEX\n"
+    "attribute vec4 a_texcoord;\n"
+    "void main() {\n"
+    "    v_texcoord = a_texcoord.xy;\n"
+    "    gl_Position = vec4(0.0);\n"
+    "}\n"
+    "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
     "uniform sampler2D rightEyeTexture;\n"
-    "varying vec2 v_texcoord;\n"
     "void main() {\n"
     "    vec2 texCoord = v_texcoord;\n"
-    "    // Left half is left eye, right half is right eye\n"
     "    if (texCoord.x < 0.5) {\n"
     "        texCoord.x *= 2.0;\n"
-    "        gl_FragColor = texture2D(leftEyeTexture, texCoord);\n"
+    "        fragColor = texture2D(leftEyeTexture, texCoord);\n"
     "    } else {\n"
     "        texCoord.x = (texCoord.x - 0.5) * 2.0;\n"
-    "        gl_FragColor = texture2D(rightEyeTexture, texCoord);\n"
+    "        fragColor = texture2D(rightEyeTexture, texCoord);\n"
     "    }\n"
-    "}\n";
+    "}\n"
+    "#endif\n";
 
 static const char* g_topbottom_shader_source =
-    "#version 120\n"
+    "varying vec2 v_texcoord;\n"
+    "#ifdef VERTEX\n"
+    "attribute vec4 a_texcoord;\n"
+    "void main() {\n"
+    "    v_texcoord = a_texcoord.xy;\n"
+    "    gl_Position = vec4(0.0);\n"
+    "}\n"
+    "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
     "uniform sampler2D rightEyeTexture;\n"
-    "varying vec2 v_texcoord;\n"
     "void main() {\n"
     "    vec2 texCoord = v_texcoord;\n"
-    "    // Top half is left eye, bottom half is right eye\n"
     "    if (texCoord.y < 0.5) {\n"
     "        texCoord.y *= 2.0;\n"
-    "        gl_FragColor = texture2D(leftEyeTexture, texCoord);\n"
+    "        fragColor = texture2D(leftEyeTexture, texCoord);\n"
     "    } else {\n"
     "        texCoord.y = (texCoord.y - 0.5) * 2.0;\n"
-    "        gl_FragColor = texture2D(rightEyeTexture, texCoord);\n"
+    "        fragColor = texture2D(rightEyeTexture, texCoord);\n"
     "    }\n"
-    "}\n";
+    "}\n"
+    "#endif\n";
 
 static const char* g_interlaced_shader_source =
-    "#version 120\n"
+    "varying vec2 v_texcoord;\n"
+    "#ifdef VERTEX\n"
+    "attribute vec4 a_texcoord;\n"
+    "void main() {\n"
+    "    v_texcoord = a_texcoord.xy;\n"
+    "    gl_Position = vec4(0.0);\n"
+    "}\n"
+    "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
     "uniform sampler2D rightEyeTexture;\n"
     "uniform vec2 screenSize;\n"
-    "varying vec2 v_texcoord;\n"
     "void main() {\n"
-    "    // Interlaced scanline rendering:\n"
-    "    // Odd scanlines: left eye\n"
-    "    // Even scanlines: right eye\n"
     "    float scanline = mod(gl_FragCoord.y, 2.0);\n"
     "    if (scanline > 0.5) {\n"
-    "        // Odd scanline - left eye\n"
-    "        gl_FragColor = texture2D(leftEyeTexture, v_texcoord);\n"
+    "        fragColor = texture2D(leftEyeTexture, v_texcoord);\n"
     "    } else {\n"
-    "        // Even scanline - right eye\n"
-    "        gl_FragColor = texture2D(rightEyeTexture, v_texcoord);\n"
+    "        fragColor = texture2D(rightEyeTexture, v_texcoord);\n"
     "    }\n"
-    "}\n";
+    "}\n"
+    "#endif\n";
 
 // Polarized stereoscopy shader
 // Left image: even scanlines
 // Right image: odd scanlines
 // Each scanline is marked with polarization state (encoded in output)
 static const char* g_polarized_shader_source =
-    "#version 120\n"
+    "varying vec2 v_texcoord;\n"
+    "#ifdef VERTEX\n"
+    "attribute vec4 a_texcoord;\n"
+    "void main() {\n"
+    "    v_texcoord = a_texcoord.xy;\n"
+    "    gl_Position = vec4(0.0);\n"
+    "}\n"
+    "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
     "uniform sampler2D rightEyeTexture;\n"
     "uniform vec2 screenSize;\n"
-    "varying vec2 v_texcoord;\n"
     "void main() {\n"
-    "    // Polarized stereoscopy:\n"
-    "    // Even scanlines: left eye (horizontal polarization)\n"
-    "    // Odd scanlines: right eye (vertical polarization)\n"
-    "    // The display hardware uses polarized filters to separate the images\n"
     "    float scanline = mod(gl_FragCoord.y, 2.0);\n"
     "    vec4 color;\n"
     "    if (scanline > 0.5) {\n"
-    "        // Odd scanline - right eye (vertical polarization)\n"
     "        color = texture2D(rightEyeTexture, v_texcoord);\n"
     "    } else {\n"
-    "        // Even scanline - left eye (horizontal polarization)\n"
     "        color = texture2D(leftEyeTexture, v_texcoord);\n"
     "    }\n"
-    "    // Output color directly - display hardware handles polarization\n"
-    "    gl_FragColor = color;\n"
-    "}\n";
+    "    fragColor = color;\n"
+    "}\n"
+    "#endif\n";
 
 // Checkerboard pattern shader
 // Interleave pixels in checkerboard pattern
 // Left eye on black squares, right eye on white squares
 static const char* g_checkerboard_shader_source =
-    "#version 120\n"
+    "varying vec2 v_texcoord;\n"
+    "#ifdef VERTEX\n"
+    "attribute vec4 a_texcoord;\n"
+    "void main() {\n"
+    "    v_texcoord = a_texcoord.xy;\n"
+    "    gl_Position = vec4(0.0);\n"
+    "}\n"
+    "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
     "uniform sampler2D rightEyeTexture;\n"
     "uniform vec2 screenSize;\n"
-    "varying vec2 v_texcoord;\n"
     "void main() {\n"
-    "    // Checkerboard pattern: pixel-level interlacing\n"
-    "    // Creates a checkerboard by interleaving pixels from left and right eyes\n"
-    "    // Sample the pixel coordinates\n"
     "    float pixelX = gl_FragCoord.x;\n"
     "    float pixelY = gl_FragCoord.y;\n"
-    "    \n"
-    "    // Determine if we're on a 'black' or 'white' square\n"
     "    float checker = mod(pixelX + pixelY, 2.0);\n"
-    "    \n"
     "    vec4 color;\n"
     "    if (checker > 0.5) {\n"
-    "        // White squares: right eye\n"
     "        color = texture2D(rightEyeTexture, v_texcoord);\n"
     "    } else {\n"
-    "        // Black squares: left eye\n"
     "        color = texture2D(leftEyeTexture, v_texcoord);\n"
     "    }\n"
-    "    \n"
-    "    gl_FragColor = color;\n"
-    "}\n";
+    "    fragColor = color;\n"
+    "}\n"
+    "#endif\n";
 
 // Vertex shader for fullscreen quad rendering
 static const char* g_fullscreen_quad_vertex_shader_source =
-    "#version 120\n"
-    "varying vec2 v_texcoord;\n"
+    "#version 330 core\n"
+    "layout(location = 0) in vec2 position;\n"
+    "layout(location = 1) in vec2 texCoord;\n"
+    "out vec2 v_texcoord;\n"
     "void main() {\n"
     "    // Full screen quad with texture coordinates\n"
     "    // Vertices: (-1,-1), (1,-1), (-1,1), (1,1)\n"
-    "    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;\n"
-    "    v_texcoord = gl_MultiTexCoord0.xy;\n"
+    "    gl_Position = vec4(position, 0.0, 1.0);\n"
+    "    v_texcoord = texCoord;\n"
     "}\n";
 
 // Helper function to create framebuffer object for a texture
@@ -255,17 +278,25 @@ void StereoCompositor_Init(int width, int height)
         printf("StereoCompositor_Init: %dx%d\n", width, height);
     }
 
+    // Safety check: ensure we have valid parameters
+    if (width <= 0 || height <= 0) {
+        printf("StereoCompositor_Init: Invalid dimensions %dx%d\n", width, height);
+        return;
+    }
+
     // Initialize compositor state
     g_compositor.width = width;
     g_compositor.height = height;
     g_compositor.initialized = 1;
-    g_compositor.use_render_to_texture = 1;  // Enable RTT by default
+    g_compositor.use_render_to_texture = 0;  // Disable RTT by default - only enable if GL is ready
     g_compositor.last_composite_time = 0.0f;
 
     // Create RGBA textures for left and right eye rendering
     // Initially empty; will be filled by render-to-texture operations
-    g_compositor.left_eye_texture = (uintptr_t)GR_CreateRGBATexture(width, height, NULL);
-    g_compositor.right_eye_texture = (uintptr_t)GR_CreateRGBATexture(width, height, NULL);
+    printf("StereoCompositor_Init: Skipping texture creation for now...\n");
+    g_compositor.left_eye_texture = 0;
+    g_compositor.right_eye_texture = 0;
+    printf("StereoCompositor_Init: Texture creation skipped\n");
 
     if (gStereoDebugLog) {
         printf("StereoCompositor: Created left texture %p, right texture %p\n",
@@ -273,37 +304,68 @@ void StereoCompositor_Init(int width, int height)
     }
 
 #if defined(USE_OPENGL)
-    // Create framebuffer objects for rendering to textures
+    // Try to create framebuffer objects for rendering to textures
     g_compositor.left_eye_fbo = CreateFramebufferForTexture(g_compositor.left_eye_texture, width, height);
     g_compositor.right_eye_fbo = CreateFramebufferForTexture(g_compositor.right_eye_texture, width, height);
 
     if (!g_compositor.left_eye_fbo || !g_compositor.right_eye_fbo) {
         printf("StereoCompositor: Warning - Framebuffer creation failed, will fall back to double render\n");
         g_compositor.use_render_to_texture = 0;
+    } else {
+        // Create fullscreen quad for composition rendering
+        CreateFullscreenQuadVAO(&g_compositor.fullscreen_quad_vao, &g_compositor.fullscreen_quad_vbo);
+        g_compositor.use_render_to_texture = 1;  // Enable RTT only if everything succeeded
     }
-
-    // Create fullscreen quad for composition rendering
-    CreateFullscreenQuadVAO(&g_compositor.fullscreen_quad_vao, &g_compositor.fullscreen_quad_vbo);
 #endif
 
+    // Dump shaders for debugging
+    FILE* shader_dump = fopen("shader_sources.txt", "w");
+    if (shader_dump) {
+        fprintf(shader_dump, "=== ANAGLYPH SIMPLE ===\n%s\n\n", g_anaglyph_simple_shader_source);
+        fprintf(shader_dump, "=== ANAGLYPH FULLCOLOR ===\n%s\n\n", g_anaglyph_fullcolor_shader_source);
+        fprintf(shader_dump, "=== SIDEBYSIDE ===\n%s\n\n", g_sidebyside_shader_source);
+        fprintf(shader_dump, "=== TOPBOTTOM ===\n%s\n\n", g_topbottom_shader_source);
+        fprintf(shader_dump, "=== INTERLACED ===\n%s\n\n", g_interlaced_shader_source);
+        fprintf(shader_dump, "=== POLARIZED ===\n%s\n\n", g_polarized_shader_source);
+        fprintf(shader_dump, "=== CHECKERBOARD ===\n%s\n\n", g_checkerboard_shader_source);
+        fprintf(shader_dump, "=== VERTEX SHADER ===\n%s\n\n", g_fullscreen_quad_vertex_shader_source);
+        fclose(shader_dump);
+        printf("Shader sources dumped to shader_sources.txt\n");
+    }
+
     // Compile anaglyph shaders
+    printf("Compiling anaglyph simple shader...\n");
     g_compositor.anaglyph_shader = (uintptr_t)GR_Shader_Compile(g_anaglyph_simple_shader_source, 0);
+    printf("Anaglyph simple shader result: %p\n", (void*)g_compositor.anaglyph_shader);
+
+    printf("Compiling anaglyph fullcolor shader...\n");
     g_compositor.anaglyph_fullcolor_shader = (uintptr_t)GR_Shader_Compile(g_anaglyph_fullcolor_shader_source, 0);
+    printf("Anaglyph fullcolor shader result: %p\n", (void*)g_compositor.anaglyph_fullcolor_shader);
 
     // Compile side-by-side shader
+    printf("Compiling sidebyside shader...\n");
     g_compositor.sidebyside_shader = (uintptr_t)GR_Shader_Compile(g_sidebyside_shader_source, 0);
+    printf("Sidebyside shader result: %p\n", (void*)g_compositor.sidebyside_shader);
 
     // Compile top-bottom shader
+    printf("Compiling topbottom shader...\n");
     g_compositor.topbottom_shader = (uintptr_t)GR_Shader_Compile(g_topbottom_shader_source, 0);
+    printf("Topbottom shader result: %p\n", (void*)g_compositor.topbottom_shader);
 
     // Compile interlaced scanline shader
+    printf("Compiling interlaced shader...\n");
     g_compositor.interlaced_shader = (uintptr_t)GR_Shader_Compile(g_interlaced_shader_source, 0);
+    printf("Interlaced shader result: %p\n", (void*)g_compositor.interlaced_shader);
 
     // Compile polarized stereoscopy shader
+    printf("Compiling polarized shader...\n");
     g_compositor.polarized_shader = (uintptr_t)GR_Shader_Compile(g_polarized_shader_source, 0);
+    printf("Polarized shader result: %p\n", (void*)g_compositor.polarized_shader);
 
     // Compile checkerboard pattern shader
+    printf("Compiling checkerboard shader...\n");
     g_compositor.checkerboard_shader = (uintptr_t)GR_Shader_Compile(g_checkerboard_shader_source, 0);
+    printf("Checkerboard shader result: %p\n", (void*)g_compositor.checkerboard_shader);
 
     g_compositor_initialized = 1;
 

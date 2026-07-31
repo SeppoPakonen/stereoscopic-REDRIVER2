@@ -3,6 +3,7 @@
 #include "PsyX/PsyX_render.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 // GL functions available through PsyX_render.h and glad.h includes
 
 // Global stereo state
@@ -88,21 +89,24 @@ void StereoCamera_Update(PLAYER *lp, STEREO_EYE eye)
 
     gCurrentStereoEye = eye;
 
-    // Apply eye offset to camera position
-    StereoCamera_ApplyEyeOffset(eye);
+    // Calculate and apply eye separation directly
+    // Left eye: negative offset (left), Right eye: positive offset (right)
+    float sep_distance = gStereoSeparation * 20.0f;  // Scale factor for world units
+    int offset = (int)(sep_distance * 0.5f);
 
-    // Store eye-specific positions
-    if (eye == STEREO_EYE_LEFT) {
-        stereo_camera.left_eye_pos.vx = camera_position.vx + stereo_camera.eye_offset.vx;
-        stereo_camera.left_eye_pos.vy = camera_position.vy;
-        stereo_camera.left_eye_pos.vz = camera_position.vz;
-        stereo_camera.left_eye_pos.pad = 0;
-    } else {
-        stereo_camera.right_eye_pos.vx = camera_position.vx + stereo_camera.eye_offset.vx;
-        stereo_camera.right_eye_pos.vy = camera_position.vy;
-        stereo_camera.right_eye_pos.vz = camera_position.vz;
-        stereo_camera.right_eye_pos.pad = 0;
+    if (gStereoSwapEyes) {
+        eye = (eye == STEREO_EYE_LEFT) ? STEREO_EYE_RIGHT : STEREO_EYE_LEFT;
     }
+
+    if (eye == STEREO_EYE_LEFT) {
+        camera_position.vx -= offset;
+    } else {
+        camera_position.vx += offset;
+    }
+
+    // Always print debug output for stereo camera
+    printf("StereoCamera_Update: eye=%d (sep=%.2f, offset=%d), cam_vx=%d\n",
+           eye, gStereoSeparation, offset, camera_position.vx);
 }
 
 void StereoCamera_GetViewMatrix(STEREO_EYE eye, MATRIX *out_matrix)

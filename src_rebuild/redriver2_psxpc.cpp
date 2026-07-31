@@ -20,6 +20,7 @@
 #include "C/players.h"
 #include "C/time.h"
 #include "C/draw.h"
+#include "render/stereo.h"
 
 #include "utils/ini.h"
 
@@ -571,6 +572,29 @@ int main(int argc, char** argv)
 		ini_sget(config, "render", "pgxpTextureMapping", "%d", &g_cfg_pgxpTextureCorrection);
 		ini_sget(config, "render", "pgxpZbuffer", "%d", &g_cfg_pgxpZBuffer);
 		ini_sget(config, "render", "bilinearFiltering", "%d", &g_cfg_bilinearFiltering);
+
+		// configure stereoscopic rendering
+		extern STEREO_MODE gStereoMode;
+		extern int gStereoSwapEyes;
+		extern float gStereoConvergence;
+		extern float gStereoSeparation;
+		int tempStereoMode = 0;
+		ini_sget(config, "render", "stereoMode", "%d", &tempStereoMode);
+		gStereoMode = (STEREO_MODE)tempStereoMode;
+		ini_sget(config, "render", "stereoSwapEyes", "%d", &gStereoSwapEyes);
+		ini_sget(config, "render", "stereoConvergence", "%f", &gStereoConvergence);
+		ini_sget(config, "render", "stereoSeparation", "%f", &gStereoSeparation);
+
+		// Log stereo settings loaded from config
+		FILE* stereo_init_log = fopen("stereo_config_loaded.log", "w");
+		if (stereo_init_log) {
+			fprintf(stereo_init_log, "Stereo config loaded from config.ini:\n");
+			fprintf(stereo_init_log, "  stereoMode=%d\n", gStereoMode);
+			fprintf(stereo_init_log, "  stereoSwapEyes=%d\n", gStereoSwapEyes);
+			fprintf(stereo_init_log, "  stereoConvergence=%.6f\n", gStereoConvergence);
+			fprintf(stereo_init_log, "  stereoSeparation=%.6f\n", gStereoSeparation);
+			fclose(stereo_init_log);
+		}
 
 		// configure host game
 		ini_sget(config, "game", "drawDistance", "%d", &gDrawDistance);
