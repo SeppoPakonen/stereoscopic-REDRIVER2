@@ -1689,6 +1689,10 @@ void DrawGame(void)
 		// Save original camera position
 		memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
 
+		// Skip the expensive VRAM blit + PBO download during per-eye offscreen
+		// rendering (the eye textures are kept for the composite, not blitted).
+		g_offscreenSkipBlit = 1;
+
 		// --- Left eye: queue into MPBuff[0][parity], rasterize to offscreen RT 1 ---
 		current = &MPBuff[0][parity];
 		ClearOTagR((u_long*)current->ot, OTSIZE);
@@ -1699,13 +1703,13 @@ void DrawGame(void)
 
 		current->draw.dfe = 0;
 		current->draw.clip.x = 0; current->draw.clip.y = 0;
-		current->draw.clip.w = vw; current->draw.clip.h = vh;
+		current->draw.clip.w = screenW; current->draw.clip.h = screenH;
 		PutDispEnv(&current->disp);
 		PutDrawEnv(&current->draw);
 		g_offscreenEye = 0;
 		DrawSync(0);
 		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
-		{ RECT16 fclip = { 0, 0, vw, vh }; GR_SetOffscreenState(&fclip, 0); }
+		{ RECT16 fclip = { 0, 0, screenW, screenH }; GR_SetOffscreenState(&fclip, 0); }
 
 		// --- Right eye: queue into MPBuff[0][1-parity], rasterize to offscreen RT 2 ---
 		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
@@ -1718,15 +1722,18 @@ void DrawGame(void)
 
 		current->draw.dfe = 0;
 		current->draw.clip.x = 0; current->draw.clip.y = 0;
-		current->draw.clip.w = vw; current->draw.clip.h = vh;
+		current->draw.clip.w = screenW; current->draw.clip.h = screenH;
 		PutDispEnv(&current->disp);
 		PutDrawEnv(&current->draw);
 		g_offscreenEye = 1;
 		DrawSync(0);
 		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
-		{ RECT16 fclip = { 0, 0, vw, vh }; GR_SetOffscreenState(&fclip, 0); }
+		{ RECT16 fclip = { 0, 0, screenW, screenH }; GR_SetOffscreenState(&fclip, 0); }
 
 		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+
+		// Re-enable normal offscreen blit behaviour for the rest of the frame
+		g_offscreenSkipBlit = 0;
 
 		// Composite both eyes to the screen (blit-based)
 		StereoLog_Write("composite: mode=%d left=%d right=%d", gStereoMode, g_offscreenRTTexture, g_offscreenRTTexture2);

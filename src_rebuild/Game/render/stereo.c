@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <SDL.h>
 // GL functions available through PsyX_render.h and glad.h includes
 
 // Global stereo state
@@ -131,25 +132,28 @@ void StereoCamera_ApplyToRender(STEREO_EYE eye)
         return;
     }
 
-    // Apply the eye offset to camera position
+    // Apply the eye offset along the camera's right axis (perpendicular to view).
+    // camera_matrix is the inverse view matrix; its first column is the camera's
+    // right vector in world space (fixed-point, 4096 = 1.0).
     StereoCamera_ApplyEyeOffset(eye);
 
-    // Note: camera_position is a global that's used for vertex transform calculations
-    // We apply the offset by modifying it here
-    // In a production implementation, this would use proper matrix transforms
-
-    if (eye == STEREO_EYE_LEFT) {
-        camera_position.vx -= (int)(gStereoSeparation * 20.0f * 0.5f);
-    } else {
-        camera_position.vx += (int)(gStereoSeparation * 20.0f * 0.5f);
-    }
-
+    int offset = (int)(gStereoSeparation * 2.0f);  // subtle separation in world units
     if (gStereoSwapEyes) {
-        camera_position.vx = -camera_position.vx;
+        eye = (eye == STEREO_EYE_LEFT) ? STEREO_EYE_RIGHT : STEREO_EYE_LEFT;
     }
+    int sign = (eye == STEREO_EYE_LEFT) ? -1 : 1;
+
+    int rx = camera_matrix.m[0][0];
+    int ry = camera_matrix.m[1][0];
+    int rz = camera_matrix.m[2][0];
+
+    camera_position.vx += (rx * offset * sign) >> 12;
+    camera_position.vy += (ry * offset * sign) >> 12;
+    camera_position.vz += (rz * offset * sign) >> 12;
 
     if (gStereoDebugLog) {
-        printf("StereoCamera_ApplyToRender: eye=%d, camera_pos.x=%d\n", eye, camera_position.vx);
+        printf("StereoCamera_ApplyToRender: eye=%d, offset=%d, cam=(%d,%d,%d)\n",
+               eye, offset, camera_position.vx, camera_position.vy, camera_position.vz);
     }
 }
 
@@ -245,6 +249,9 @@ void StereoLog_Write(const char *fmt, ...)
 {
     if (!g_stereo_iter_log)
         return;
+
+    // Prepend a timestamp so frame rate / timing can be measured.
+    fprintf(g_stereo_iter_log, "[%u] ", (unsigned int)SDL_GetTicks());
 
     va_list args;
     va_start(args, fmt);
