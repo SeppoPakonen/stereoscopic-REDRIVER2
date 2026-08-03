@@ -1637,15 +1637,16 @@ void DrawGame(void)
 	// in the working directory so the renderer codepath is observable.
 	StereoLog_Open();
 
-	// Initialize stereo compositor once (guard against multiple inits)
-	// DISABLED - causing memory corruption. Will implement simplified stereo rendering without compositor.
+	// Initialize stereo compositor once (guard against multiple inits).
+	// DISABLED for now: the spatial on-screen split needs no compositor, and the
+	// shader init is suspected in the intermittent crash.
 	static int stereo_compositor_initialized_guard = 0;
 	if (0 && !stereo_compositor_initialized_guard && gStereoMode != STEREO_DISABLED) {
 		int screenW = 320, screenH = 240;
 #ifndef PSX
 		PsyX_GetScreenSize(&screenW, &screenH);
 #endif
-		printf("DrawGame: Initializing StereoCompositor with %d x %d\n", screenW, screenH);
+		StereoLog_Write("DrawGame: Init StereoCompositor %dx%d", screenW, screenH);
 		StereoCompositor_Init(screenW, screenH);
 		stereo_compositor_initialized_guard = 1;
 	}
@@ -1680,141 +1681,72 @@ void DrawGame(void)
 		PsyX_GetScreenSize(&screenW, &screenH);
 #endif
 
-		// Handle different stereo modes - using scissor test for output separation
-		if (gStereoMode == STEREO_SIDEBYSIDE)
-		{
-			// Side-by-Side: left eye on left half, right eye on right half
-			if (gStereoDebugLog) {
-				printf("DrawGame: side-by-side rendering with scissor test\n");
-			}
+		// Per-eye rendering: each eye into its own OT buffer, then rasterized to the
+	// screen with a draw-env clip (spatial split for SBS/TB). No offscreen RTT.
+		const int parity = FrameCnt & 1;
+		const int vw = 320, vh = 240;
 
-			// Clear full screen
-			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
-
-			// Save original camera position
-			memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
-			printf("DrawGame: Rendering side-by-side, screen %d x %d\n", screenW, screenH);
-
-			// Enable scissor test and render left eye to left half
-#ifndef PSX
-			#define GL_SCISSOR_TEST 0x0C11
-			#define GL_NO_ERROR 0
-			printf("DrawGame: About to enable scissor test\n");
-			glEnable(GL_SCISSOR_TEST);
-			int err1 = glGetError();
-			printf("DrawGame: glEnable error: 0x%X\n", err1);
-
-			glScissor(0, 0, screenW / 2, screenH);
-			int err2 = glGetError();
-			printf("DrawGame: glScissor error: 0x%X (left half: 0,0 %d,%d)\n", err2, screenW/2, screenH);
-#endif
-
-			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
-#ifndef PSX
-			int left_enabled = glIsEnabled(GL_SCISSOR_TEST);
-			printf("DrawGame: Before RenderGame2 LEFT - scissor enabled: %d\n", left_enabled);
-#endif
-			RenderGame2(0);
-
-			// Restore camera and render right eye to right half
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-#ifndef PSX
-			glScissor(screenW / 2, 0, screenW / 2, screenH);
-			int err3 = glGetError();
-			printf("DrawGame: glScissor error (right half): 0x%X (%d,0 %d,%d)\n", err3, screenW/2, screenW/2, screenH);
-#endif
-			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
-#ifndef PSX
-			int right_enabled = glIsEnabled(GL_SCISSOR_TEST);
-			printf("DrawGame: Before RenderGame2 RIGHT - scissor enabled: %d\n", right_enabled);
-#endif
-			RenderGame2(0);
-
-			// Disable scissor test and restore camera
-#ifndef PSX
-			glDisable(GL_SCISSOR_TEST);
-			int err4 = glGetError();
-			printf("DrawGame: glDisable error: 0x%X\n", err4);
-#endif
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-		}
-		else if (gStereoMode == STEREO_TOPBOTTOM)
-		{
-			// Top-Bottom: left eye on top half, right eye on bottom half
-			if (gStereoDebugLog) {
-				printf("DrawGame: top-bottom rendering\n");
-			}
-
-			// Clear screen
-			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
-
-			// Save original camera position
-			memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
-
-			// Render left eye
-			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
-			RenderGame2(0);
-
-			// Restore camera and offset for right eye
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-			camera_position = camera_position;  // dummy to avoid compiler warnings
-			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
-			RenderGame2(0);
-
-			// Restore original camera position
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-		}
-		else if (gStereoMode == STEREO_INTERLACED)
-		{
-			// Interlaced scanline mode - simplified (just render both eyes to screen)
-			if (gStereoDebugLog) {
-				printf("DrawGame: interlaced scanline rendering (simplified)\n");
-			}
-
-			// Clear screen once
-			GR_Clear(0, 0, screenW, screenH, 0, 0, 0);
-
-			// Save original camera position (already saved above)
-
-			// Render left eye
-			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
-			RenderGame2(0);
-
-			// Restore camera and offset for right eye
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
-			RenderGame2(0);
-
-			// Restore original camera position
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-
-			if (gStereoDebugLog) {
-				printf("DrawGame: interlaced rendering complete\n");
-			}
-		}
-		else
-		{
-			// Anaglyph modes - simplified (just render both eyes to screen)
-			StereoDebugLog("DrawGame: TAKING ANAGLYPH RENDERING PATH (simplified), mode=%d", gStereoMode);
-
-			// Save original camera position (already saved above)
-
-			// Render left eye
-			StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
-			RenderGame2(0);
-
-			// Restore camera and offset for right eye
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-			StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
-			RenderGame2(0);
-
-			// Restore original camera position
-			memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
-
-			StereoDebugLog("DrawGame: Anaglyph rendering complete");
+		// On-screen clip rect for each eye (PSX VRAM coords; mapped to window)
+		RECT16 leftClip = { 0, 0, vw, vh };
+		RECT16 rightClip = { 0, 0, vw, vh };
+		switch (gStereoMode) {
+			case STEREO_SIDEBYSIDE:
+				leftClip.w = vw / 2;
+				rightClip.x = vw / 2; rightClip.w = vw / 2;
+				break;
+			case STEREO_TOPBOTTOM:
+				leftClip.h = vh / 2;
+				rightClip.y = vh / 2; rightClip.h = vh / 2;
+				break;
+			default:
+				// Color/interleave modes: both eyes full-screen (overlap placeholder)
+				break;
 		}
 
-		SwapDrawBuffers();
+		// Save original camera position
+		memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
+
+		// --- Left eye: queue into MPBuff[0][parity], rasterize to left clip ---
+		current = &MPBuff[0][parity];
+		ClearOTagR((u_long*)current->ot, OTSIZE);
+		current->primptr = current->primtab;
+		StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
+		RenderGame2(0);
+		StereoLog_Write("eye L: OT prims=%d clip=(%d,%d %dx%d)", (int)(current->primptr - current->primtab), leftClip.x, leftClip.y, leftClip.w, leftClip.h);
+
+		current->draw.dfe = 1;
+		current->draw.clip = leftClip;
+		PutDrawEnv(&current->draw);
+		DrawSync(0);
+		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
+
+		// --- Right eye: queue into MPBuff[0][1-parity], rasterize to right clip ---
+		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+		current = &MPBuff[0][1 - parity];
+		ClearOTagR((u_long*)current->ot, OTSIZE);
+		current->primptr = current->primtab;
+		StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
+		RenderGame2(0);
+		StereoLog_Write("eye R: OT prims=%d clip=(%d,%d %dx%d)", (int)(current->primptr - current->primtab), rightClip.x, rightClip.y, rightClip.w, rightClip.h);
+
+		current->draw.dfe = 1;
+		current->draw.clip = rightClip;
+		PutDrawEnv(&current->draw);
+		DrawSync(0);
+		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
+
+		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+
+		// Toggle buffers (replicate SwapDrawBuffers) and clear the next frame's
+		if ((FrameCnt & 1) != 0) {
+			current = &MPBuff[0][0];
+			last = &MPBuff[0][1];
+		} else {
+			current = &MPBuff[0][1];
+			last = &MPBuff[0][0];
+		}
+		ClearOTagR((u_long*)current->ot, OTSIZE);
+		current->primptr = current->primtab;
 	}
 	// Non-stereo rendering paths (original behavior)
 	else if (NumPlayers == 1 || NoPlayerControl)

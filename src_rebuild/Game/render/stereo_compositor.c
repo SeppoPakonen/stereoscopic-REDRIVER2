@@ -19,10 +19,11 @@ static int g_in_eye_render = 0;
 static const char* g_anaglyph_simple_shader_source =
     "varying vec2 v_texcoord;\n"
     "#ifdef VERTEX\n"
+    "attribute vec4 a_position;\n"
     "attribute vec4 a_texcoord;\n"
     "void main() {\n"
     "    v_texcoord = a_texcoord.xy;\n"
-    "    gl_Position = vec4(0.0);\n"
+    "    gl_Position = a_position;\n"
     "}\n"
     "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
@@ -37,10 +38,11 @@ static const char* g_anaglyph_simple_shader_source =
 static const char* g_anaglyph_fullcolor_shader_source =
     "varying vec2 v_texcoord;\n"
     "#ifdef VERTEX\n"
+    "attribute vec4 a_position;\n"
     "attribute vec4 a_texcoord;\n"
     "void main() {\n"
     "    v_texcoord = a_texcoord.xy;\n"
-    "    gl_Position = vec4(0.0);\n"
+    "    gl_Position = a_position;\n"
     "}\n"
     "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
@@ -59,10 +61,11 @@ static const char* g_anaglyph_fullcolor_shader_source =
 static const char* g_sidebyside_shader_source =
     "varying vec2 v_texcoord;\n"
     "#ifdef VERTEX\n"
+    "attribute vec4 a_position;\n"
     "attribute vec4 a_texcoord;\n"
     "void main() {\n"
     "    v_texcoord = a_texcoord.xy;\n"
-    "    gl_Position = vec4(0.0);\n"
+    "    gl_Position = a_position;\n"
     "}\n"
     "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
@@ -82,10 +85,11 @@ static const char* g_sidebyside_shader_source =
 static const char* g_topbottom_shader_source =
     "varying vec2 v_texcoord;\n"
     "#ifdef VERTEX\n"
+    "attribute vec4 a_position;\n"
     "attribute vec4 a_texcoord;\n"
     "void main() {\n"
     "    v_texcoord = a_texcoord.xy;\n"
-    "    gl_Position = vec4(0.0);\n"
+    "    gl_Position = a_position;\n"
     "}\n"
     "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
@@ -105,10 +109,11 @@ static const char* g_topbottom_shader_source =
 static const char* g_interlaced_shader_source =
     "varying vec2 v_texcoord;\n"
     "#ifdef VERTEX\n"
+    "attribute vec4 a_position;\n"
     "attribute vec4 a_texcoord;\n"
     "void main() {\n"
     "    v_texcoord = a_texcoord.xy;\n"
-    "    gl_Position = vec4(0.0);\n"
+    "    gl_Position = a_position;\n"
     "}\n"
     "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
@@ -131,10 +136,11 @@ static const char* g_interlaced_shader_source =
 static const char* g_polarized_shader_source =
     "varying vec2 v_texcoord;\n"
     "#ifdef VERTEX\n"
+    "attribute vec4 a_position;\n"
     "attribute vec4 a_texcoord;\n"
     "void main() {\n"
     "    v_texcoord = a_texcoord.xy;\n"
-    "    gl_Position = vec4(0.0);\n"
+    "    gl_Position = a_position;\n"
     "}\n"
     "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
@@ -158,10 +164,11 @@ static const char* g_polarized_shader_source =
 static const char* g_checkerboard_shader_source =
     "varying vec2 v_texcoord;\n"
     "#ifdef VERTEX\n"
+    "attribute vec4 a_position;\n"
     "attribute vec4 a_texcoord;\n"
     "void main() {\n"
     "    v_texcoord = a_texcoord.xy;\n"
-    "    gl_Position = vec4(0.0);\n"
+    "    gl_Position = a_position;\n"
     "}\n"
     "#else\n"
     "uniform sampler2D leftEyeTexture;\n"
@@ -304,18 +311,11 @@ void StereoCompositor_Init(int width, int height)
     }
 
 #if defined(USE_OPENGL)
-    // Try to create framebuffer objects for rendering to textures
-    g_compositor.left_eye_fbo = CreateFramebufferForTexture(g_compositor.left_eye_texture, width, height);
-    g_compositor.right_eye_fbo = CreateFramebufferForTexture(g_compositor.right_eye_texture, width, height);
-
-    if (!g_compositor.left_eye_fbo || !g_compositor.right_eye_fbo) {
-        printf("StereoCompositor: Warning - Framebuffer creation failed, will fall back to double render\n");
-        g_compositor.use_render_to_texture = 0;
-    } else {
-        // Create fullscreen quad for composition rendering
-        CreateFullscreenQuadVAO(&g_compositor.fullscreen_quad_vao, &g_compositor.fullscreen_quad_vbo);
-        g_compositor.use_render_to_texture = 1;  // Enable RTT only if everything succeeded
-    }
+    // We composite from the PsyX offscreen render targets (g_offscreenRTTexture /
+    // g_offscreenRTTexture2), so we only need the fullscreen quad + shaders here.
+    // The left/right eye textures are set from the offscreen targets each frame.
+    CreateFullscreenQuadVAO(&g_compositor.fullscreen_quad_vao, &g_compositor.fullscreen_quad_vbo);
+    g_compositor.use_render_to_texture = 1;
 #endif
 
     // Dump shaders for debugging
@@ -569,6 +569,13 @@ void StereoCompositor_Composite(STEREO_MODE mode)
         }
         return;
     }
+
+    // The eye images were rendered into the PsyX offscreen render targets.
+    // Point the compositor at those textures for the shader.
+    extern TextureID g_offscreenRTTexture;
+    extern TextureID g_offscreenRTTexture2;
+    g_compositor.left_eye_texture = g_offscreenRTTexture;
+    g_compositor.right_eye_texture = g_offscreenRTTexture2;
 
     // Select appropriate shader based on stereo mode
     uintptr_t shader = 0;
