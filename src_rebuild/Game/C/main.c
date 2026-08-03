@@ -1703,13 +1703,17 @@ void DrawGame(void)
 
 		current->draw.dfe = 0;
 		current->draw.clip.x = 0; current->draw.clip.y = 0;
-		current->draw.clip.w = screenW; current->draw.clip.h = screenH;
+		current->draw.clip.w = vw; current->draw.clip.h = vh;
 		PutDispEnv(&current->disp);
 		PutDrawEnv(&current->draw);
 		g_offscreenEye = 0;
 		DrawSync(0);
 		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
-		{ RECT16 fclip = { 0, 0, screenW, screenH }; GR_SetOffscreenState(&fclip, 0); }
+		{ RECT16 fclip = { 0, 0, vw, vh }; GR_SetOffscreenState(&fclip, 0); }
+
+		// Reset the shared offscreen-size tracker so the right eye resizes its
+		// own offscreen texture (the two eyes share g_PreviousOffscreen).
+		GR_ResetOffscreenSize();
 
 		// --- Right eye: queue into MPBuff[0][1-parity], rasterize to offscreen RT 2 ---
 		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
@@ -1722,13 +1726,13 @@ void DrawGame(void)
 
 		current->draw.dfe = 0;
 		current->draw.clip.x = 0; current->draw.clip.y = 0;
-		current->draw.clip.w = screenW; current->draw.clip.h = screenH;
+		current->draw.clip.w = vw; current->draw.clip.h = vh;
 		PutDispEnv(&current->disp);
 		PutDrawEnv(&current->draw);
 		g_offscreenEye = 1;
 		DrawSync(0);
 		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
-		{ RECT16 fclip = { 0, 0, screenW, screenH }; GR_SetOffscreenState(&fclip, 0); }
+		{ RECT16 fclip = { 0, 0, vw, vh }; GR_SetOffscreenState(&fclip, 0); }
 
 		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
 

@@ -577,19 +577,19 @@ void StereoCompositor_Composite(STEREO_MODE mode)
         // Left eye -> left half
         glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glBlitFramebuffer(0, 0, w, h, 0, 0, halfW, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, 320, 240, 0, 0, halfW, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         // Right eye -> right half
         glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer2);
-        glBlitFramebuffer(0, 0, w, h, halfW, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, 320, 240, halfW, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     } else if (mode == STEREO_TOPBOTTOM) {
         int halfH = h / 2;
         // Left eye -> top half
         glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glBlitFramebuffer(0, 0, w, h, 0, halfH, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, 320, 240, 0, halfH, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         // Right eye -> bottom half
         glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer2);
-        glBlitFramebuffer(0, 0, w, h, 0, 0, w, halfH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, 320, 240, 0, 0, w, halfH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     } else {
         StereoLog_Write("composite: mode %d not yet supported (blit)", mode);
     }
