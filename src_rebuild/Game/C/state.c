@@ -4,6 +4,8 @@
 #include "glaunch.h"
 #include "Frontend/FEmain.h"
 
+#include <SDL.h>
+
 //-------------------------------------------
 
 typedef void (*StateFn)(void*);
@@ -42,6 +44,7 @@ void DoStateLoop()
 #ifdef __EMSCRIPTEN__
 	emscripten_set_main_loop(emStateFunc, 0, 1);
 #else
+	unsigned int startTicks = SDL_GetTicks();
 	do
 	{
 		StateFn stateFn = gCurrentState;
@@ -50,6 +53,10 @@ void DoStateLoop()
 			break;
 
 		stateFn(gCurrentStateParam);
+
+		// Command-line auto-exit (-exitafter N seconds)
+		if (gAutoExitAfterMs > 0 && (int)(SDL_GetTicks() - startTicks) >= gAutoExitAfterMs)
+			break;
 	} while (true);
 #endif
 }

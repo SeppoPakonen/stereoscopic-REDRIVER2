@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 // GL functions available through PsyX_render.h and glad.h includes
 
 // Global stereo state
@@ -82,6 +83,8 @@ void StereoCamera_Update(PLAYER *lp, STEREO_EYE eye)
         gCurrentStereoEye = STEREO_EYE_MONO;
         return;
     }
+
+    StereoLog_Write("StereoCamera_Update: eye=%d sep=%.2f", eye, gStereoSeparation);
 
     if (!stereo_initialized) {
         StereoCamera_Init();
@@ -215,6 +218,48 @@ void StereoDebug_Shutdown(void)
         fprintf(stereo_log_file, "\n=== End of Log ===\n");
         fclose(stereo_log_file);
         stereo_log_file = NULL;
+    }
+}
+
+// ============ Iteration Log (stereo_iter.log) ============
+// Always-on file logger, independent of gStereoDebugLog, so the renderer
+// codepath is observable without a GUI window. Flushed on every write.
+
+static FILE *g_stereo_iter_log = NULL;
+
+void StereoLog_Open(void)
+{
+    if (g_stereo_iter_log)
+        return;
+
+    g_stereo_iter_log = fopen("stereo_iter.log", "w");
+    if (g_stereo_iter_log) {
+        fprintf(g_stereo_iter_log, "=== REDRIVER2 stereo iteration log ===\n");
+        fprintf(g_stereo_iter_log, "Mode=%d Sep=%.2f Conv=%.2f Swap=%d\n\n",
+                gStereoMode, gStereoSeparation, gStereoConvergence, gStereoSwapEyes);
+        fflush(g_stereo_iter_log);
+    }
+}
+
+void StereoLog_Write(const char *fmt, ...)
+{
+    if (!g_stereo_iter_log)
+        return;
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(g_stereo_iter_log, fmt, args);
+    va_end(args);
+    fprintf(g_stereo_iter_log, "\n");
+    fflush(g_stereo_iter_log);
+}
+
+void StereoLog_Close(void)
+{
+    if (g_stereo_iter_log) {
+        fprintf(g_stereo_iter_log, "\n=== End of iteration log ===\n");
+        fclose(g_stereo_iter_log);
+        g_stereo_iter_log = NULL;
     }
 }
 

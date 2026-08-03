@@ -176,6 +176,9 @@ int gLoadedMotionCapture = 0;
 int FrAng = 0;
 int wetness = 0;
 
+// Command-line auto-exit (ms). 0 = disabled.
+int gAutoExitAfterMs = 0;
+
 extern SPEECH_QUEUE gSpeechQueue;
 
 // [D] [T]
@@ -1630,6 +1633,10 @@ int ObjectDrawnValue = 0;
 // [D] [T]
 void DrawGame(void)
 {
+	// Open the always-on iteration log (idempotent). Writes stereo_iter.log
+	// in the working directory so the renderer codepath is observable.
+	StereoLog_Open();
+
 	// Initialize stereo compositor once (guard against multiple inits)
 	// DISABLED - causing memory corruption. Will implement simplified stereo rendering without compositor.
 	static int stereo_compositor_initialized_guard = 0;
@@ -1658,6 +1665,7 @@ void DrawGame(void)
 	// Simplified version without compositor - just renders both eyes to screen (overlapping)
 	if (gStereoMode != STEREO_DISABLED && NumPlayers == 1)
 	{
+		StereoLog_Write("DrawGame: STEREO PATH taken, mode=%d NumPlayers=%d", gStereoMode, NumPlayers);
 		printf("DrawGame: TAKING STEREO RENDERING PATH, mode=%d\n", gStereoMode);
 		if (gStereoDebugLog) {
 			printf("DrawGame: stereo rendering, mode=%d\n", gStereoMode);
@@ -2206,6 +2214,54 @@ int redriver2_main(int argc, char** argv)
 			GameType = GAME_TAKEADRIVE;
 			SetState(STATE_GAMELAUNCH);
 		}
+		else if (!strcmp(argv[i], "-stereo"))
+		{
+			if (argc - i < 2)
+			{
+				printError("-stereo missing argument!");
+				return -1;
+			}
+			gStereoMode = (STEREO_MODE)atoi(argv[i + 1]);
+			i++;
+		}
+		else if (!strcmp(argv[i], "-stereosep"))
+		{
+			if (argc - i < 2)
+			{
+				printError("-stereosep missing argument!");
+				return -1;
+			}
+			gStereoSeparation = (float)atof(argv[i + 1]);
+			i++;
+		}
+		else if (!strcmp(argv[i], "-stereoconv"))
+		{
+			if (argc - i < 2)
+			{
+				printError("-stereoconv missing argument!");
+				return -1;
+			}
+			gStereoConvergence = (float)atof(argv[i + 1]);
+			i++;
+		}
+		else if (!strcmp(argv[i], "-swap"))
+		{
+			gStereoSwapEyes = 1;
+		}
+		else if (!strcmp(argv[i], "-stereodebug"))
+		{
+			gStereoDebugLog = 1;
+		}
+		else if (!strcmp(argv[i], "-exitafter"))
+		{
+			if (argc - i < 2)
+			{
+				printError("-exitafter missing argument!");
+				return -1;
+			}
+			gAutoExitAfterMs = atoi(argv[i + 1]) * 1000;
+			i++;
+		}
 #endif // _DEBUG_OPTIONS
 		else if (!strcmp(argv[i], "-replay"))
 		{
@@ -2287,6 +2343,8 @@ int redriver2_main(int argc, char** argv)
 #endif // PSX
 
 	DoStateLoop();
+
+	StereoLog_Close();
 
 #ifndef PSX
 	SaveCurrentProfile(1);

@@ -3,6 +3,7 @@
 
 extern int game_over;
 extern int gDemoLevel;
+extern int gAutoExitAfterMs;   // 0 = disabled; else auto-exit N ms after start
 
 extern XZPAIR gStartPos;
 

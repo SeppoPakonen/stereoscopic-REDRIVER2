@@ -68,6 +68,13 @@ void StereoDebug_LogFrame(int frame_num);
 void StereoDebug_LogRenderPhase(const char *phase, STEREO_EYE eye);
 void StereoDebug_LogCameraUpdate(STEREO_EYE eye, VECTOR *pos);
 
+// Iteration log: always writes to "stereo_iter.log" in the working directory,
+// independent of gStereoDebugLog, so the renderer codepath is observable
+// without a GUI window. Flushed on every write.
+void StereoLog_Open(void);
+void StereoLog_Write(const char *fmt, ...);
+void StereoLog_Close(void);
+
 // Scissor test helpers for interlaced rendering
 // These functions help restrict rendering to specific scanlines
 void StereoScissor_SetOddScanlines(int screenHeight);
