@@ -10,7 +10,7 @@
 // Global Quality State
 // ============================================================================
 
-STEREO_QUALITY_SETTINGS g_stereo_quality_settings = {0};
+STEREO_QUALITY_SETTINGS g_stereo_quality_settings = {};
 SCENE_ANALYSIS g_current_scene_analysis = {0};
 static int g_quality_initialized = 0;
 static int g_debug_logging = 0;
@@ -307,7 +307,7 @@ void StereoQuality_LoadPreset(STEREO_QUALITY_PRESET preset)
             g_stereo_quality_settings.enable_edge_blending = 1;
             g_stereo_quality_settings.edge_blend.edge_blend_width = 20.0f;
             g_stereo_quality_settings.edge_blend.edge_blend_strength = 1.0f;
-            g_stereo_quality_settings.enable_edge_detection = 1;
+            g_stereo_quality_settings.edge_blend.enable_edge_detection = 1;
             g_stereo_quality_settings.edge_blend.edge_threshold = 0.1f;
             g_stereo_quality_settings.tone_mapping.auto_tone_map = 1;
             g_stereo_quality_settings.enable_scene_analysis = 1;

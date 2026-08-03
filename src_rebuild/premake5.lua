@@ -269,6 +269,13 @@ project "REDRIVER2"
 			JPEG_DIR.."/",
         }
     
+        filter {"system:Windows", "toolset:gcc"}
+            includedirs {
+                (os.getenv("MINGW32_INCLUDE") or "/usr/local/include").."/SDL2",
+                os.getenv("MINGW32_INCLUDE") or "/usr/local/include",
+            }
+
+        filter { "system:Windows", "toolset:msc" }
         linkoptions {
 			"/SAFESEH:NO", -- Image Has Safe Exception Handers: No. Because of openal-soft
         }

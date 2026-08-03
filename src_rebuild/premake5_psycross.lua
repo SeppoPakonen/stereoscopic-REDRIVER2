@@ -23,12 +23,28 @@ project "PsyCross"
 		"PsyCross/include"
     }
 
-    filter "system:Windows"
+    filter {"system:Windows", "toolset:gcc"}
+        includedirs {
+            (os.getenv("MINGW32_INCLUDE") or "/usr/local/include").."/SDL2",
+            os.getenv("MINGW32_INCLUDE") or "/usr/local/include",
+        }
+
+    filter {"system:Windows", "not toolset:gcc"}
 	    defines { "_WINDOWS" }
         links { 
             "opengl32",
             "SDL2", 
             "OpenAL32"
+        }
+
+	filter {"system:Windows", "toolset:gcc"}
+	    links {
+            "opengl32",
+            "SDL2",
+            "openal"
+        }
+        libdirs {
+            os.getenv("MINGW32_LIB") or "/usr/local/lib",
         }
 
 	filter {"system:Windows", "platforms:x86"}
@@ -69,3 +85,20 @@ usage "PsyCross"
 		"PsyCross/include",
 		"PsyCross/include/psx"
 	}
+
+	filter {"system:Windows", "not toolset:gcc"}
+		links {
+			"opengl32",
+			"SDL2",
+			"OpenAL32"
+		}
+
+	filter {"system:Windows", "toolset:gcc"}
+		links {
+			"opengl32",
+			"SDL2",
+			"openal"
+		}
+		libdirs {
+			os.getenv("MINGW32_LIB") or "/usr/local/lib",
+		}

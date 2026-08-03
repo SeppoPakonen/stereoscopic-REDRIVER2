@@ -295,7 +295,7 @@ void StereoTestHarness_GenerateReport(const char *output_file)
     fprintf(f, "| Category | Tests | Passed | Failed |\n");
     fprintf(f, "|----------|-------|--------|--------|\n");
 
-    TEST_CATEGORY cat;
+    int cat;
     for (cat = 0; cat < 8; cat++) {
         int total = 0, passed = 0;
         int i;
