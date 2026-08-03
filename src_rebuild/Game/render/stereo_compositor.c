@@ -554,84 +554,49 @@ void StereoCompositor_RenderFullscreenQuad(uintptr_t shader)
 
 void StereoCompositor_Composite(STEREO_MODE mode)
 {
-    if (!g_compositor_initialized)
-        return;
-
-    if (gStereoDebugLog) {
-        printf("StereoCompositor_Composite: mode=%d, RTT=%s\n", mode,
-               g_compositor.use_render_to_texture ? "yes" : "no");
-    }
-
-    // If RTT is not available, skip composite (will use fallback double render)
-    if (!g_compositor.use_render_to_texture) {
-        if (gStereoDebugLog) {
-            printf("StereoCompositor_Composite: RTT disabled, skipping\n");
-        }
-        return;
-    }
-
-    // The eye images were rendered into the PsyX offscreen render targets.
-    // Point the compositor at those textures for the shader.
+#if defined(USE_OPENGL)
+    // Sources: the two PsyX offscreen render targets hold the eye images.
     extern TextureID g_offscreenRTTexture;
     extern TextureID g_offscreenRTTexture2;
-    g_compositor.left_eye_texture = g_offscreenRTTexture;
-    g_compositor.right_eye_texture = g_offscreenRTTexture2;
+    extern GLuint g_glOffscreenFramebuffer;
+    extern GLuint g_glOffscreenFramebuffer2;
+    extern int g_windowWidth;
+    extern int g_windowHeight;
 
-    // Select appropriate shader based on stereo mode
-    uintptr_t shader = 0;
-    switch (mode) {
-        case STEREO_ANAGLYPH_SIMPLE:
-            shader = g_compositor.anaglyph_shader;
-            break;
-        case STEREO_ANAGLYPH_FULLCOLOR:
-            shader = g_compositor.anaglyph_fullcolor_shader;
-            break;
-        case STEREO_SIDEBYSIDE:
-            shader = g_compositor.sidebyside_shader;
-            break;
-        case STEREO_TOPBOTTOM:
-            shader = g_compositor.topbottom_shader;
-            break;
-        case STEREO_INTERLACED:
-            shader = g_compositor.interlaced_shader;
-            break;
-        case STEREO_POLARIZED:
-            shader = g_compositor.polarized_shader;
-            break;
-        case STEREO_CHECKERBOARD:
-            shader = g_compositor.checkerboard_shader;
-            break;
-        default:
-            if (gStereoDebugLog) {
-                printf("StereoCompositor_Composite: Unknown mode %d\n", mode);
-            }
-            return;
-    }
+    int w = g_windowWidth, h = g_windowHeight;
+    if (w <= 0 || h <= 0) { w = 1280; h = 720; }
 
-    if (!shader) {
-        printf("StereoCompositor_Composite: Shader not compiled for mode %d\n", mode);
-        return;
-    }
-
-#if defined(USE_OPENGL)
-    // Make sure we're rendering to the backbuffer
+    // Bind the default framebuffer (window/backbuffer) and blit each eye.
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, g_compositor.width, g_compositor.height);
-
-    // Disable depth test for quad rendering
+    glViewport(0, 0, w, h);
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_SCISSOR_TEST);
 
-    // Render the fullscreen quad with the composition shader
-    StereoCompositor_RenderFullscreenQuad(shader);
-
-    // Re-enable depth test
-    glEnable(GL_DEPTH_TEST);
-
-    glUseProgram(0);
-
-    if (gStereoDebugLog) {
-        printf("StereoCompositor_Composite complete\n");
+    if (mode == STEREO_SIDEBYSIDE) {
+        int halfW = w / 2;
+        // Left eye -> left half
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBlitFramebuffer(0, 0, 320, 240, 0, 0, halfW, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        // Right eye -> right half
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer2);
+        glBlitFramebuffer(0, 0, 320, 240, halfW, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    } else if (mode == STEREO_TOPBOTTOM) {
+        int halfH = h / 2;
+        // Left eye -> top half
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBlitFramebuffer(0, 0, 320, 240, 0, halfH, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        // Right eye -> bottom half
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, g_glOffscreenFramebuffer2);
+        glBlitFramebuffer(0, 0, 320, 240, 0, 0, w, halfH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    } else {
+        StereoLog_Write("composite: mode %d not yet supported (blit)", mode);
     }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glEnable(GL_DEPTH_TEST);
 #endif
 }
 

@@ -1681,61 +1681,56 @@ void DrawGame(void)
 		PsyX_GetScreenSize(&screenW, &screenH);
 #endif
 
-		// Per-eye rendering: each eye into its own OT buffer, then rasterized to the
-	// screen with a draw-env clip (spatial split for SBS/TB). No offscreen RTT.
+		// Per-eye rendering: each eye into its own OT buffer, rasterized to its own
+	// PsyX offscreen render target, then composited to the screen.
 		const int parity = FrameCnt & 1;
 		const int vw = 320, vh = 240;
-
-		// On-screen clip rect for each eye (PSX VRAM coords; mapped to window)
-		RECT16 leftClip = { 0, 0, vw, vh };
-		RECT16 rightClip = { 0, 0, vw, vh };
-		switch (gStereoMode) {
-			case STEREO_SIDEBYSIDE:
-				leftClip.w = vw / 2;
-				rightClip.x = vw / 2; rightClip.w = vw / 2;
-				break;
-			case STEREO_TOPBOTTOM:
-				leftClip.h = vh / 2;
-				rightClip.y = vh / 2; rightClip.h = vh / 2;
-				break;
-			default:
-				// Color/interleave modes: both eyes full-screen (overlap placeholder)
-				break;
-		}
 
 		// Save original camera position
 		memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
 
-		// --- Left eye: queue into MPBuff[0][parity], rasterize to left clip ---
+		// --- Left eye: queue into MPBuff[0][parity], rasterize to offscreen RT 1 ---
 		current = &MPBuff[0][parity];
 		ClearOTagR((u_long*)current->ot, OTSIZE);
 		current->primptr = current->primtab;
 		StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
 		RenderGame2(0);
-		StereoLog_Write("eye L: OT prims=%d clip=(%d,%d %dx%d)", (int)(current->primptr - current->primtab), leftClip.x, leftClip.y, leftClip.w, leftClip.h);
+		StereoLog_Write("eye L: OT prims=%d", (int)(current->primptr - current->primtab));
 
-		current->draw.dfe = 1;
-		current->draw.clip = leftClip;
+		current->draw.dfe = 0;
+		current->draw.clip.x = 0; current->draw.clip.y = 0;
+		current->draw.clip.w = vw; current->draw.clip.h = vh;
+		PutDispEnv(&current->disp);
 		PutDrawEnv(&current->draw);
+		g_offscreenEye = 0;
 		DrawSync(0);
 		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
+		{ RECT16 fclip = { 0, 0, vw, vh }; GR_SetOffscreenState(&fclip, 0); }
 
-		// --- Right eye: queue into MPBuff[0][1-parity], rasterize to right clip ---
+		// --- Right eye: queue into MPBuff[0][1-parity], rasterize to offscreen RT 2 ---
 		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
 		current = &MPBuff[0][1 - parity];
 		ClearOTagR((u_long*)current->ot, OTSIZE);
 		current->primptr = current->primtab;
 		StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
 		RenderGame2(0);
-		StereoLog_Write("eye R: OT prims=%d clip=(%d,%d %dx%d)", (int)(current->primptr - current->primtab), rightClip.x, rightClip.y, rightClip.w, rightClip.h);
+		StereoLog_Write("eye R: OT prims=%d", (int)(current->primptr - current->primtab));
 
-		current->draw.dfe = 1;
-		current->draw.clip = rightClip;
+		current->draw.dfe = 0;
+		current->draw.clip.x = 0; current->draw.clip.y = 0;
+		current->draw.clip.w = vw; current->draw.clip.h = vh;
+		PutDispEnv(&current->disp);
 		PutDrawEnv(&current->draw);
+		g_offscreenEye = 1;
 		DrawSync(0);
 		DrawOTag((u_long*)(current->ot + OTSIZE - 1));
+		{ RECT16 fclip = { 0, 0, vw, vh }; GR_SetOffscreenState(&fclip, 0); }
 
 		memcpy(&camera_position, &saved_camera_base, sizeof(SVECTOR));
+
+		// Composite both eyes to the screen (blit-based)
+		StereoLog_Write("composite: mode=%d left=%d right=%d", gStereoMode, g_offscreenRTTexture, g_offscreenRTTexture2);
+		StereoCompositor_Composite(gStereoMode);
 
 		// Toggle buffers (replicate SwapDrawBuffers) and clear the next frame's
 		if ((FrameCnt & 1) != 0) {
