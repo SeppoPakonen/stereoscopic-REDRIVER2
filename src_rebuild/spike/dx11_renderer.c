@@ -409,15 +409,16 @@ void Dx11Renderer_CaptureToBMP(Dx11Renderer *r, ID3D11Texture2D *src,
             const unsigned char *row = srcp + (size_t)(h - 1 - y) * map.RowPitch;
             unsigned char *out = dst + (size_t)y * rowSize;
             for (int x = 0; x < w; ++x) {
-                unsigned char b = row[x * 4 + 0];
-                unsigned char g = row[x * 4 + 1];
-                unsigned char r8 = row[x * 4 + 2];
-                out[x * 3 + 0] = b;
+                // R8G8B8A8 -> BMP BGR (byte0=R, byte1=G, byte2=B).
+                unsigned char r8 = row[x * 4 + 0];
+                unsigned char g  = row[x * 4 + 1];
+                unsigned char bb = row[x * 4 + 2];
+                out[x * 3 + 0] = bb;
                 out[x * 3 + 1] = g;
                 out[x * 3 + 2] = r8;
                 if (r8 > chm0) chm0 = r8;
                 if (r8 < chr0) chr0 = r8;
-                if (r8 > 60 || g > 60 || b > 60) {
+                if (r8 > 60 || g > 60 || bb > 60) {
                     ++brightPix;
                     if (x < minX) minX = x;
                     if (x > maxX) maxX = x;

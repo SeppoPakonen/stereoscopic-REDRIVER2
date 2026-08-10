@@ -100,7 +100,10 @@ static void DecodeToRGBA(Dx11Tex *t, unsigned short tpage, unsigned short clut,
             p[0] = (unsigned char)((col & 31) << 3);
             p[1] = (unsigned char)(((col >> 5) & 31) << 3);
             p[2] = (unsigned char)(((col >> 10) & 31) << 3);
-            p[3] = 255;
+            // Semi-transparency: the psyx shader inverts the rgLUT stp bit
+            // (stp<<7) with `t.w = 1.0 - t.w`, so final alpha = 1 - stp*0.5
+            // (1.0 opaque, 0.5 if the palette entry's stp bit is set).
+            p[3] = ((col >> 15) & 1) ? 128 : 255;
         }
     }
 }

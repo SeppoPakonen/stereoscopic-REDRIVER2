@@ -124,6 +124,13 @@ renderer in T1.5.
   R8G8B8A8 texture+SRV cache (`Bake`/`GetSRV`), white 1x1 substitute.
   Design: **per-texture CPU bake**, not a VRAM atlas. Harness:
   `dx11_textures_test.cpp`.
+- **`dx11_shaders.{h,c}`** (T1.4) — `Dx11Shaders`: universal VS (world→view→proj
+  via b0/b1) + flat/gouraud textured PS (flat color from a per-draw `b2` CB;
+  untextured = white substitute), input layout matching `Dx11ResVertex`, the 5
+  PSX blend states (`NONE/AVERAGE/ADD/SUBTRACT/ADD_QUATER`), opaque/translucent
+  depth-stencil states, cull/two-sided rasterizer states. Harness:
+  `dx11_shaders_test.cpp`. Also **fixed a T1.1 bug**: `CaptureToBMP` was writing
+  the BMP with R and B swapped (the render was always correct).
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

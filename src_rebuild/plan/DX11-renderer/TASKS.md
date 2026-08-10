@@ -29,7 +29,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 - [x] **T1.1** DX11 device/context/swapchain + render targets — [T1.1](T1.1-dx11-device-context-swapchain.md)
 - [x] **T1.2** Resource management (VB/IB, CBs, SRVs, arena) — [T1.2](T1.2-resource-management.md)
 - [x] **T1.3** Texture system: VRAM/tpage/clut → DX11 SRVs — [T1.3](T1.3-texture-system.md)
-- [ ] **T1.4** Shaders + render state — [T1.4](T1.4-shaders-and-render-state.md)
+- [x] **T1.4** Shaders + render state — [T1.4](T1.4-shaders-and-render-state.md)
 - [ ] **T1.5** Draw-command execution (culling, sort, batch) — [T1.5](T1.5-draw-command-execution.md)
 - [ ] **T1.6** Render map/terrain + match visual output — [T1.6](T1.6-render-map-and-match-output.md)
 - [ ] **T1.7** DX11 platform & input (DirectX window + DirectInput8) — [T1.7](T1.7-dx11-platform-input-directinput.md)
