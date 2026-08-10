@@ -31,7 +31,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 - [x] **T1.3** Texture system: VRAM/tpage/clut → DX11 SRVs — [T1.3](T1.3-texture-system.md)
 - [x] **T1.4** Shaders + render state — [T1.4](T1.4-shaders-and-render-state.md)
 - [x] **T1.5** Draw-command execution (culling, sort, batch) — [T1.5](T1.5-draw-command-execution.md)
-- [ ] **T1.6** Render map/terrain + match visual output — [T1.6](T1.6-render-map-and-match-output.md)
+- [x] **T1.6** Model → arena adapter + headless harness — [T1.6](T1.6-render-map-and-match-output.md)
 - [ ] **T1.7** DX11 platform & input (DirectX window + DirectInput8) — [T1.7](T1.7-dx11-platform-input-directinput.md)
 - [ ] **T1.8** DX11 audio (XAudio2) — [T1.8](T1.8-dx11-audio-xaudio2.md)
 

@@ -139,8 +139,20 @@ renderer in T1.5.
   material/state front-to-back, translucent back-to-front by sortKey, opaque
   first), material/world/index-contiguous **batching**, and `DrawIndexed`
   emission on top of `dx11_resources` + `dx11_textures` + `dx11_shaders`.
-  Harness: `dx11_drawcmdexec_test.cpp`. The game `DrawCommand`/`MODEL` → arena
-  adapter that feeds it is T1.6.
+  Harness: `dx11_drawcmdexec_test.cpp`.
+- **`dx11_modeladapter.{h,c}`** (T1.6) — `Dx11ModelAdapter`: the game-side
+  **MODEL → arena adapter** — converts a raw, game-agnostic mesh (int16
+  `Dx11ModelVertex` + `Dx11ModelPoly` mirroring the game's resolved `MODEL`
+  data: per-poly vertex indices `vi0..vi3`, tpage-local texel UVs,
+  `texture_set`/`texture_id`, flat/gouraud color, blend/state) into the
+  `dx11_resources` arena + executor commands: int16→float verts (world applied
+  via the command CB), game-winding quad split `(vi0,vi1,vi3)+(vi0,vi3,vi2)`,
+  **UV texel→normalized** by the baked region size, texture bake via a
+  `Dx11ModelTexResolve` hook (`set,id` → tpage/clut/region), local bbox, and
+  flat/gouraud + translucent (PSX 50% `stp` alpha) state. Vertices duplicated
+  per poly so same-material consecutive polys stay index-contiguous → the T1.5
+  executor batches them. Harness: `dx11_modeladapter_test.cpp` (texture /
+  gouraud / batch / sort / world / cull / blend probes, all PASS).
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

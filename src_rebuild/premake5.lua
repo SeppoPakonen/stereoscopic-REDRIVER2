@@ -458,6 +458,65 @@ project "dx11_drawcmdexec"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 MODEL -> arena adapter (T1.6): game-agnostic bridge that converts a raw
+-- model mesh (int16 vertices, per-poly vertex indices + tpage-local texel UVs +
+-- texture_set/texture_id + flat/gouraud color + state) into the dx11_resources
+-- arena and executor commands: UV texel->normalized, texture bake via a resolve
+-- hook, world + local bbox, flat/gouraud, translucent. Driven by
+-- dx11_modeladapter_test.cpp on top of the full stack; verified headless
+-- (texture/gouraud/batch/sort/world/cull/blend probes + counts).
+-- ---------------------------------------------------------------------------
+project "dx11_modeladapter"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_resources.h",
+        "spike/dx11_resources.c",
+        "spike/dx11_textures.h",
+        "spike/dx11_textures.c",
+        "spike/dx11_shaders.h",
+        "spike/dx11_shaders.c",
+        "spike/dx11_drawcmdexec.h",
+        "spike/dx11_drawcmdexec.c",
+        "spike/dx11_modeladapter.h",
+        "spike/dx11_modeladapter.c",
+        "spike/dx11_modeladapter_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 shaders + render state (T1.4): universal VS + flat/gouraud textured PS,
 -- the PSX blend/depth-stencil/rasterizer states, and a per-draw flat-color CB.
 -- Driven by dx11_shaders_test.cpp on top of dx11_renderer + dx11_textures;
