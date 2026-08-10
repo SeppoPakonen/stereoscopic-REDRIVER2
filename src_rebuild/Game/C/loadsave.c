@@ -514,7 +514,9 @@ int LoadConfigData(char* buffer)
 	{
 		gStereoMode = (STEREO_MODE)header->stereo_mode;
 		gStereoSwapEyes = header->stereo_swap_eyes;
-		gStereoDebugLog = header->stereo_debug_log;
+		// gStereoDebugLog intentionally not loaded from the profile: it stays 0
+		// unless enabled explicitly with the -stereodebug command-line flag, so
+		// the per-frame render-loop debug prints don't slow the game.
 		if (header->stereo_separation_x100 != 0)
 			gStereoSeparation = (float)header->stereo_separation_x100 / 100.0f;
 		if (header->stereo_convergence_x100 != 0)

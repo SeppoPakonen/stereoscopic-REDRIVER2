@@ -74,6 +74,7 @@ void StereoDebug_LogCameraUpdate(STEREO_EYE eye, VECTOR *pos);
 void StereoLog_Open(void);
 void StereoLog_Write(const char *fmt, ...);
 void StereoLog_Close(void);
+extern int gStereoIterLogEnabled;   // enables the iteration log (-iterlog)
 
 // Scissor test helpers for interlaced rendering
 // These functions help restrict rendering to specific scanlines

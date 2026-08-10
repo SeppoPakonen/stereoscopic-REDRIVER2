@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <math.h>
 #include <SDL.h>
 // GL functions available through PsyX_render.h and glad.h includes
 
@@ -93,24 +94,11 @@ void StereoCamera_Update(PLAYER *lp, STEREO_EYE eye)
 
     gCurrentStereoEye = eye;
 
-    // Calculate and apply eye separation directly
-    // Left eye: negative offset (left), Right eye: positive offset (right)
-    float sep_distance = gStereoSeparation * 20.0f;  // Scale factor for world units
-    int offset = (int)(sep_distance * 0.5f);
-
-    if (gStereoSwapEyes) {
-        eye = (eye == STEREO_EYE_LEFT) ? STEREO_EYE_RIGHT : STEREO_EYE_LEFT;
+    // The eye offset is applied in StereoCamera_ApplyToRender (after InitCamera
+    // resets camera_position), so nothing to do here beyond selecting the eye.
+    if (gStereoDebugLog) {
+        printf("StereoCamera_Update: eye=%d\n", eye);
     }
-
-    if (eye == STEREO_EYE_LEFT) {
-        camera_position.vx -= offset;
-    } else {
-        camera_position.vx += offset;
-    }
-
-    // Always print debug output for stereo camera
-    printf("StereoCamera_Update: eye=%d (sep=%.2f, offset=%d), cam_vx=%d\n",
-           eye, gStereoSeparation, offset, camera_position.vx);
 }
 
 void StereoCamera_GetViewMatrix(STEREO_EYE eye, MATRIX *out_matrix)
@@ -132,24 +120,31 @@ void StereoCamera_ApplyToRender(STEREO_EYE eye)
         return;
     }
 
-    // Apply the eye offset along the camera's right axis (perpendicular to view).
-    // camera_matrix is the inverse view matrix; its first column is the camera's
-    // right vector in world space (fixed-point, 4096 = 1.0).
+    // Apply the eye offset along the camera's LATERAL (left/right) axis.
+    // The camera_matrix column 0 is the view (forward) axis (and is distorted),
+    // so compute the left/right axis from the camera yaw instead (same as
+    // InitFrustrumMatrix): left = (RSIN(-yaw), 0, RCOS(-yaw)).
     StereoCamera_ApplyEyeOffset(eye);
 
     int offset = (int)(gStereoSeparation * 2.0f);  // subtle separation in world units
     if (gStereoSwapEyes) {
         eye = (eye == STEREO_EYE_LEFT) ? STEREO_EYE_RIGHT : STEREO_EYE_LEFT;
     }
-    int sign = (eye == STEREO_EYE_LEFT) ? -1 : 1;
 
-    int rx = camera_matrix.m[0][0];
-    int ry = camera_matrix.m[1][0];
-    int rz = camera_matrix.m[2][0];
+    float yaw = (float)(camera_angle.vy & 0xFFF) * (2.0f * 3.14159265f / 4096.0f);
+    int lx = (int)(sinf(-yaw) * 4096.0f);
+    int lz = (int)(cosf(-yaw) * 4096.0f);
 
-    camera_position.vx += (rx * offset * sign) >> 12;
-    camera_position.vy += (ry * offset * sign) >> 12;
-    camera_position.vz += (rz * offset * sign) >> 12;
+    // Left eye shifts toward the LEFT axis, right eye toward the RIGHT (-left).
+    int ax = (eye == STEREO_EYE_LEFT) ? lx : -lx;
+    int az = (eye == STEREO_EYE_LEFT) ? lz : -lz;
+
+    camera_position.vx += (ax * offset) >> 12;
+    camera_position.vz += (az * offset) >> 12;
+
+    StereoLog_Write("ApplyToRender: eye=%d offset=%d cam=(%d,%d,%d) left=(%d,0,%d) yaw=%d",
+                    eye, offset, camera_position.vx, camera_position.vy, camera_position.vz,
+                    lx >> 12, lz >> 12, camera_angle.vy & 0xFFF);
 
     if (gStereoDebugLog) {
         printf("StereoCamera_ApplyToRender: eye=%d, offset=%d, cam=(%d,%d,%d)\n",
@@ -226,14 +221,15 @@ void StereoDebug_Shutdown(void)
 }
 
 // ============ Iteration Log (stereo_iter.log) ============
-// Always-on file logger, independent of gStereoDebugLog, so the renderer
-// codepath is observable without a GUI window. Flushed on every write.
+// Off by default; enabled with the -iterlog command-line flag so the renderer
+// codepath is observable when needed but the game runs at full speed otherwise.
 
+int gStereoIterLogEnabled = 0;
 static FILE *g_stereo_iter_log = NULL;
 
 void StereoLog_Open(void)
 {
-    if (g_stereo_iter_log)
+    if (!gStereoIterLogEnabled || g_stereo_iter_log)
         return;
 
     g_stereo_iter_log = fopen("stereo_iter.log", "w");
@@ -263,11 +259,12 @@ void StereoLog_Write(const char *fmt, ...)
 
 void StereoLog_Close(void)
 {
-    if (g_stereo_iter_log) {
-        fprintf(g_stereo_iter_log, "\n=== End of iteration log ===\n");
-        fclose(g_stereo_iter_log);
-        g_stereo_iter_log = NULL;
-    }
+    if (!g_stereo_iter_log)
+        return;
+
+    fprintf(g_stereo_iter_log, "\n=== End of iteration log ===\n");
+    fclose(g_stereo_iter_log);
+    g_stereo_iter_log = NULL;
 }
 
 // ============ Scissor Test Helpers for Interlaced Rendering ============

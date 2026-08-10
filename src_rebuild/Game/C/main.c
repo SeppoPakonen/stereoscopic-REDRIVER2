@@ -1660,15 +1660,14 @@ void DrawGame(void)
 	// Prepare for stereo rendering
 	SVECTOR saved_camera_base = {0, 0, 0, 0};
 	memcpy(&saved_camera_base, &camera_position, sizeof(SVECTOR));
-	printf("DrawGame: Base camera_position.vx = %d\n", saved_camera_base.vx);
 
 	// Stereo rendering path: render scene twice (left and right eye) when stereo is enabled
 	// Simplified version without compositor - just renders both eyes to screen (overlapping)
 	if (gStereoMode != STEREO_DISABLED && NumPlayers == 1)
 	{
 		StereoLog_Write("DrawGame: STEREO PATH taken, mode=%d NumPlayers=%d", gStereoMode, NumPlayers);
-		printf("DrawGame: TAKING STEREO RENDERING PATH, mode=%d\n", gStereoMode);
 		if (gStereoDebugLog) {
+			printf("DrawGame: TAKING STEREO RENDERING PATH, mode=%d\n", gStereoMode);
 			printf("DrawGame: stereo rendering, mode=%d\n", gStereoMode);
 		}
 
@@ -2189,6 +2188,10 @@ int redriver2_main(int argc, char** argv)
 		else if (!strcmp(argv[i], "-stereodebug"))
 		{
 			gStereoDebugLog = 1;
+		}
+		else if (!strcmp(argv[i], "-iterlog"))
+		{
+			gStereoIterLogEnabled = 1;
 		}
 		else if (!strcmp(argv[i], "-exitafter"))
 		{
