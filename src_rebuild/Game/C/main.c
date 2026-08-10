@@ -38,6 +38,7 @@
 #include "camera.h"
 #include "../render/stereo.h"
 #include "../render/stereo_compositor.h"
+#include "../render/renderer.h"
 #include "PsyX/PsyX_render.h"
 #include "overlay.h"
 #include "debris.h"
@@ -151,6 +152,10 @@ int current_camera_angle = 2048;
 
 int scr_z = 0;
 int FrameCnt = 0;
+
+// Active renderer backend, chosen once at startup from -renderer <name>.
+// Defaults to the DX11 backend (see renderer.h).
+RendererId gRenderer = RENDERER_DX11;
 
 static int WantPause = 0;
 static PAUSEMODE PauseMode = PAUSEMODE_PAUSE;
@@ -1637,6 +1642,16 @@ void DrawGame(void)
 	// in the working directory so the renderer codepath is observable.
 	StereoLog_Open();
 
+	// --- Renderer backend dispatch (T0.1) ---
+	// The DX11 backend is the default but is not implemented yet (Phase 1+).
+	// Until the draw-command DX11 stack lands, both backends run the legacy
+	// path so the game stays playable. This dispatch point is where the DX11
+	// render path is inserted in Phase 1.
+	if (Renderer_IsDX11())
+		StereoLog_Write("DrawGame: backend=dx11 (legacy fallback until Phase 1)");
+	else
+		StereoLog_Write("DrawGame: backend=psyx (legacy)");
+
 	// Initialize stereo compositor once (guard against multiple inits).
 	// DISABLED for now: the spatial on-screen split needs no compositor, and the
 	// shader init is suspected in the intermittent crash.
@@ -1871,6 +1886,7 @@ void PrintCommandLineArguments()
 		"  -playercar <number>, -player2car <number> : set player wanted car\n"
 		"  -chase <number> : using specified chase number for mission\n"
 		"  -mission <number> : starts specified mission\n"
+		"  -renderer <name> : rendering backend (dx11 default, psyx legacy)\n"
 #endif // DEBUG_OPTIONS
 		"  -replay <filename.d2rp> : starts replay from file\n"
 #ifdef CUTSCENE_RECORDER
@@ -2162,6 +2178,19 @@ int redriver2_main(int argc, char** argv)
 
 			GameType = GAME_TAKEADRIVE;
 			SetState(STATE_GAMELAUNCH);
+		}
+		else if (!strcmp(argv[i], "-renderer"))
+		{
+			if (argc - i < 2)
+			{
+				printError("-renderer missing argument!");
+				return -1;
+			}
+			gRenderer = Renderer_FromName(argv[i + 1]);
+			if (strcmp(argv[i + 1], Renderer_ToName(gRenderer)) != 0)
+				printError("Unknown renderer \"%s\", falling back to \"%s\"",
+				       argv[i + 1], Renderer_ToName(gRenderer));
+			i++;
 		}
 		else if (!strcmp(argv[i], "-stereo"))
 		{

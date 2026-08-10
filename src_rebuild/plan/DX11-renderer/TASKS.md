@@ -1,59 +1,63 @@
-# Tasks — DX11 Renderer (multi-renderer)
+# Tasks — renderer rewrite (multi-renderer, DX11 default)
 
-Goal: replace the OpenGL/PsyX rasterization layer with a DirectX 11 backend that
-renders the game's OT/primitive stream **directly per-eye**, enabling correct
-per-eye stereo, higher internal resolution, color modes, and split-screen.
+Goal: replace the PSX primitive renderer with a **standard DirectX 11 renderer
+stack** fed by a high-level **draw-command list**, so per-eye stereo, higher
+internal resolution, color modes and split-screen become clean features — while
+the legacy PsyX/PsyCross GL renderer stays selectable via `-renderer psyx`.
 
-## Phase 0 — Architecture & spike
+Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
+(planned) `-renderer gl`. The DX11 path never uses the OT/primitive stream.
 
-- [ ] **T0.1** Map the game's primitive/OT stream: what `RenderGame2` queues into
-      `current->ot` / `primtab`, and the exact set of PSX primitive types (sprite,
-      poly, line, tile, etc.) PsyX's `DrawOTag` rasterizes.
-- [ ] **T0.2** Decide the integration boundary: a DX11 backend that converts the
-      OT/primitive stream into DX11 draw calls, replacing `DrawOTag` + PsyX GPU.
-- [ ] **T0.3** Spike: a bare DX11 window that renders a single test primitive from
-      one OT, proving the pipeline before the full converter.
-- [ ] **T0.4** Define the internal-resolution model (configurable, not tied to
-      320x240) and how the projection matrix is built per viewport.
+> **Task files:** each task below has its own `T<phase>.<n>-<title>.md` file
+> (linked) that must be written/updated **before** the task is implemented.
+> Each task file declares its Phase and Milestone in the frontmatter. Template:
+> `_task-template.md`.
+>
+> Milestones: **M0** = Phase 0, **M1** = Phase 1, **M2** = Phase 2,
+> **M3** = Phase 3, **M4** = Phase 4.
 
-## Phase 1 — Core DX11 renderer
+## Phase 0 — Architecture & spike (M0)
 
-- [ ] **T1.1** DX11 device/context/swapchain setup (replacing SDL2-GL window init).
-- [ ] **T1.2** Vertex/texture/constant-buffer management.
-- [ ] **T1.3** ranslate the PSX VRAM/tpage/clut texture model to DX11 textures.
-- [ ] **T1.4** Render the map/terrain and static geometry from the OT stream.
-- [ ] **T1.5** Preserve render state (depth, blending, alpha, draw modes).
-- [ ] **T1.6** Match the current visual output (side-by-side at whatever internal
-      resolution) so behavior is verified against the GL version.
+- [x] **T0.1** Renderer registry + `-renderer` flag — [T0.1](T0.1-renderer-registry-and-flag.md)
+- [x] **T0.2** Draw-command list model — [T0.2](T0.2-draw-command-list-model.md)
+- [x] **T0.3** Audit plot functions — [T0.3](T0.3-audit-plot-functions.md)
+- [x] **T0.4** Internal resolution & projection model — [T0.4](T0.4-internal-resolution-and-projection.md)
+- [x] **T0.5** DX11 spike: bare window + one meshed quad — [T0.5](T0.5-dx11-spike-bare-window.md)
 
-## Phase 2 — Stereo natively
+## Phase 1 — Core DX11 renderer (M1)
 
-- [ ] **T2.1** Render each eye to its own DX11 render target at the configured
-      internal resolution (no 320x240 lock).
-- [ ] **T2.2** Per-eye projection using the yaw-derived lateral offset (reuse the
-      existing `StereoCamera_ApplyToRender` math).
-- [ ] **T2.3** Composite SBS/TB in the renderer (left/right halves, top/bottom).
-- [ ] **T2.4** Verify the right-eye map issue is gone (it was downstream in the GL
-      offscreen rasterization).
+- [ ] **T1.1** DX11 device/context/swapchain + render targets — [T1.1](T1.1-dx11-device-context-swapchain.md)
+- [ ] **T1.2** Resource management (VB/IB, CBs, SRVs, arena) — [T1.2](T1.2-resource-management.md)
+- [ ] **T1.3** Texture system: VRAM/tpage/clut → DX11 SRVs — [T1.3](T1.3-texture-system.md)
+- [ ] **T1.4** Shaders + render state — [T1.4](T1.4-shaders-and-render-state.md)
+- [ ] **T1.5** Draw-command execution (culling, sort, batch) — [T1.5](T1.5-draw-command-execution.md)
+- [ ] **T1.6** Render map/terrain + match visual output — [T1.6](T1.6-render-map-and-match-output.md)
+- [ ] **T1.7** DX11 platform & input (DirectX window + DirectInput8) — [T1.7](T1.7-dx11-platform-input-directinput.md)
+- [ ] **T1.8** DX11 audio (XAudio2) — [T1.8](T1.8-dx11-audio-xaudio2.md)
 
-## Phase 3 — Color modes & split-screen
+## Phase 2 — Stereo natively (M2)
 
-- [ ] **T3.1** Shader-based composite: anaglyph (simple + full-color), interlaced,
-      polarized, checkerboard.
-- [ ] **T3.2** Split-screen: 2 players x 2 eyes = 4 images, user-selectable
-      h/v split.
-- [ ] **T3.3** Higher internal resolution option (config).
+- [ ] **T2.1** Per-eye render targets — [T2.1](T2.1-per-eye-render-targets.md)
+- [ ] **T2.2** Per-eye projection (yaw-derived lateral offset) — [T2.2](T2.2-per-eye-projection.md)
+- [ ] **T2.3** SBS/TB composite in the renderer — [T2.3](T2.3-sbs-tb-composite.md)
+- [ ] **T2.4** Verify right-eye map issue is gone — [T2.4](T2.4-verify-right-eye-issue-gone.md)
 
-## Phase 4 — Integration & cleanup
+## Phase 3 — Color modes & split-screen (M3)
 
-- [ ] **T4.1** Keep the mingw32 build + headless iteration harness working.
-- [ ] **T4.2** Remove/disable the old GL/PsyX rasterization path when the DX11
-      backend is complete.
-- [ ] **T4.3** Regression-test the game non-stereo path (the DX11 renderer must
-      also render the base game correctly).
+- [ ] **T3.1** Shader-based composite color modes — [T3.1](T3.1-shader-composite-color-modes.md)
+- [ ] **T3.2** Split-screen — [T3.2](T3.2-split-screen.md)
+- [ ] **T3.3** Higher internal resolution option — [T3.3](T3.3-higher-internal-resolution-option.md)
+
+## Phase 4 — Integration & cleanup (M4)
+
+- [ ] **T4.1** mingw32 build + headless harness with `-renderer` — [T4.1](T4.1-build-and-headless-harness.md)
+- [ ] **T4.2** Keep legacy `psyx` path selectable — [T4.2](T4.2-keep-psyx-selectable.md)
+- [ ] **T4.3** Non-stereo regression — [T4.3](T4.3-non-stereo-regression.md)
+- [ ] **T4.4** (stretch) Modern GL backend mirroring DX11 — [T4.4](T4.4-modern-gl-backend.md)
 
 ## Out of scope (for now)
 
 - Full PGXP-quality 3D reconstruction / texture perspective correction.
 - Post-processing / anti-aliasing beyond what the modes need.
+- Removing the legacy psyx path (it stays as a selectable backend).
 - Platform targets beyond Windows (DirectX 11).

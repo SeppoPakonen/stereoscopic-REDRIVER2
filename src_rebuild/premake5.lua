@@ -315,3 +315,43 @@ project "REDRIVER2"
 
     filter { "files:**.c", "files:**.C" }
         compileas "C++"
+
+-- ---------------------------------------------------------------------------
+-- DX11 spike (T0.5): standalone test proving the DX11 stack. Built as its own
+-- executable so it does not interfere with the game binary. Links the mingw32
+-- Direct3D 11 / DXGI / D3DCompiler import libraries.
+-- ---------------------------------------------------------------------------
+project "dx11_spike"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_spike.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
