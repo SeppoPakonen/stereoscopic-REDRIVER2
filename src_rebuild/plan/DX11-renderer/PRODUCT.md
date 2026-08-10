@@ -131,6 +131,16 @@ renderer in T1.5.
   depth-stencil states, cull/two-sided rasterizer states. Harness:
   `dx11_shaders_test.cpp`. Also **fixed a T1.1 bug**: `CaptureToBMP` was writing
   the BMP with R and B swapped (the render was always correct).
+- **`dx11_drawcmdexec.{h,c}`** (T1.5) — `Dx11DrawCmds`: the draw-command
+  **executor** — per-frame command list (geometry already in the T1.2 arena as
+  vertex/index ranges + material + world + sort key + flags + local bbox),
+  per-command world CBs, frustum culling (bbox corners through world·viewProj,
+  replicating the shader's transposed `mul`), sorting (opaque by
+  material/state front-to-back, translucent back-to-front by sortKey, opaque
+  first), material/world/index-contiguous **batching**, and `DrawIndexed`
+  emission on top of `dx11_resources` + `dx11_textures` + `dx11_shaders`.
+  Harness: `dx11_drawcmdexec_test.cpp`. The game `DrawCommand`/`MODEL` → arena
+  adapter that feeds it is T1.6.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

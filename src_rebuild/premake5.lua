@@ -403,6 +403,61 @@ project "dx11_foundation"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 draw-command executor (T1.5): per-frame command list, view/proj + world
+-- CBs, frustum culling, sorting (opaque by material F2B / translucent by depth
+-- B2F), material batching and DrawIndexed emission on top of dx11_resources /
+-- dx11_textures / dx11_shaders. Driven by dx11_drawcmdexec_test.cpp; verified
+-- headless (cull/sort/batch/emit probes + draw-call/cull counts).
+-- ---------------------------------------------------------------------------
+project "dx11_drawcmdexec"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_resources.h",
+        "spike/dx11_resources.c",
+        "spike/dx11_textures.h",
+        "spike/dx11_textures.c",
+        "spike/dx11_shaders.h",
+        "spike/dx11_shaders.c",
+        "spike/dx11_drawcmdexec.h",
+        "spike/dx11_drawcmdexec.c",
+        "spike/dx11_drawcmdexec_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 shaders + render state (T1.4): universal VS + flat/gouraud textured PS,
 -- the PSX blend/depth-stencil/rasterizer states, and a per-draw flat-color CB.
 -- Driven by dx11_shaders_test.cpp on top of dx11_renderer + dx11_textures;
