@@ -102,3 +102,28 @@ RT/composite selection. Because `MODEL` polys each carry their own
 - The DX11 renderer builds its own projection (internal resolution configurable,
   not 320x240-locked) and per-eye projection using the yaw-derived offset.
 - Keep the game's simulation and coarse PVS culling; the renderer owns the rest.
+
+## Built DX11 modules (reusable — do not re-write)
+
+Standalone, game-agnostic DX11 modules in `spike/`, each verified headless via
+its own harness (mingw32 32-bit, `premake5 gmake2 --cc=gcc` +
+`mingw32-make <proj> config=release_x86`). Adopted into the game draw-command
+renderer in T1.5.
+
+- **`dx11_renderer.{h,c}`** (T1.1) — `Dx11Renderer`: device/context (11_0),
+  native Win32 window + DXGI swapchain, backbuffer RTV + D24 depth + viewport,
+  offscreen RT pair at internal resolution, begin-frame/present, resize,
+  backbuffer capture to BMP. Harness: `dx11_foundation.cpp`.
+- **`dx11_resources.{h,c}`** (T1.2) — `Dx11Res`: per-frame vertex arena +
+  dynamic VB/IB, per-draw world-CB pool (64-byte DEFAULT CB/slot, plain
+  `VSSetConstantBuffers`) + view/proj CB, default point sampler + `BindSRV`,
+  bounded-growth stats. Harness: `dx11_resources_test.cpp`.
+- **`dx11_textures.{h,c}`** (T1.3) — `Dx11Tex`: 1024x512 u16 VRAM staging +
+  `CopyVRAM`, CPU decode-to-RGBA (tpage X/Y, `GET_TPAGE_FORMAT`, `GET_CLUT_X/Y`,
+  4/8-bit nibble/byte extraction, CLUT lookup, RGB555→RGBA), per-region
+  R8G8B8A8 texture+SRV cache (`Bake`/`GetSRV`), white 1x1 substitute.
+  Design: **per-texture CPU bake**, not a VRAM atlas. Harness:
+  `dx11_textures_test.cpp`.
+
+Each task's `T1.n-*.md` file documents the module's API, verification outputs
+and the bugs found/fixed.

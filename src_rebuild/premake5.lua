@@ -403,6 +403,54 @@ project "dx11_foundation"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 texture system (T1.3): PSX VRAM staging + tpage/clut/RGB555 decode,
+-- baking each paletted region to an R8G8B8A8 SRV (white 1x1 substitute for
+-- untextured surfaces). Driven by dx11_textures_test.cpp on top of the
+-- dx11_renderer foundation; verified headless (BMP capture + decode assert).
+-- ---------------------------------------------------------------------------
+project "dx11_textures"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_textures.h",
+        "spike/dx11_textures.c",
+        "spike/dx11_textures_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 resource management (T1.2): per-frame vertex arena + dynamic VB, a
 -- constant-buffer arena for per-draw world matrices, and SRV/sampler binding.
 -- Driven by dx11_resources_test.cpp on top of the dx11_renderer foundation;
