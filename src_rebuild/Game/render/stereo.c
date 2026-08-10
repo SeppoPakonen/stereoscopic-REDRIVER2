@@ -121,9 +121,9 @@ void StereoCamera_ApplyToRender(STEREO_EYE eye)
     }
 
     // Apply the eye offset along the camera's LATERAL (left/right) axis.
-    // The camera_matrix column 0 is the view (forward) axis (and is distorted),
-    // so compute the left/right axis from the camera yaw instead (same as
-    // InitFrustrumMatrix): left = (RSIN(-yaw), 0, RCOS(-yaw)).
+    // The camera_matrix column 0 is the view (forward) axis and is distorted by
+    // the aspect matrix, so compute the lateral axis from the camera yaw:
+    // forward = (sin T, 0, -cos T), right = (cos T, 0, sin T).
     StereoCamera_ApplyEyeOffset(eye);
 
     int offset = (int)(gStereoSeparation * 2.0f);  // subtle separation in world units
@@ -131,20 +131,20 @@ void StereoCamera_ApplyToRender(STEREO_EYE eye)
         eye = (eye == STEREO_EYE_LEFT) ? STEREO_EYE_RIGHT : STEREO_EYE_LEFT;
     }
 
-    float yaw = (float)(camera_angle.vy & 0xFFF) * (2.0f * 3.14159265f / 4096.0f);
-    int lx = (int)(sinf(-yaw) * 4096.0f);
-    int lz = (int)(cosf(-yaw) * 4096.0f);
+    float theta = (float)(camera_angle.vy & 0xFFF) * (2.0f * 3.14159265f / 4096.0f);
+    int rx = (int)(cosf(theta) * 4096.0f);
+    int rz = (int)(sinf(theta) * 4096.0f);
 
-    // Left eye shifts toward the LEFT axis, right eye toward the RIGHT (-left).
-    int ax = (eye == STEREO_EYE_LEFT) ? lx : -lx;
-    int az = (eye == STEREO_EYE_LEFT) ? lz : -lz;
+    // Left eye shifts toward -right, right eye toward +right.
+    int ax = (eye == STEREO_EYE_LEFT) ? -rx : rx;
+    int az = (eye == STEREO_EYE_LEFT) ? -rz : rz;
 
     camera_position.vx += (ax * offset) >> 12;
     camera_position.vz += (az * offset) >> 12;
 
-    StereoLog_Write("ApplyToRender: eye=%d offset=%d cam=(%d,%d,%d) left=(%d,0,%d) yaw=%d",
+    StereoLog_Write("ApplyToRender: eye=%d offset=%d cam=(%d,%d,%d) right=(%d,0,%d) yaw=%d",
                     eye, offset, camera_position.vx, camera_position.vy, camera_position.vz,
-                    lx >> 12, lz >> 12, camera_angle.vy & 0xFFF);
+                    rx >> 12, rz >> 12, camera_angle.vy & 0xFFF);
 
     if (gStereoDebugLog) {
         printf("StereoCamera_ApplyToRender: eye=%d, offset=%d, cam=(%d,%d,%d)\n",

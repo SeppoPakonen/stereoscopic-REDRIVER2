@@ -1696,8 +1696,14 @@ void DrawGame(void)
 		current = &MPBuff[0][parity];
 		ClearOTagR((u_long*)current->ot, OTSIZE);
 		current->primptr = current->primtab;
+		StereoLog_Write("cam before L: pos=(%d,%d,%d) angle=(%d,%d,%d)",
+			camera_position.vx, camera_position.vy, camera_position.vz,
+			camera_angle.vx, camera_angle.vy, camera_angle.vz);
 		StereoCamera_Update(&player[0], STEREO_EYE_LEFT);
 		RenderGame2(0);
+		StereoLog_Write("cam after  L: pos=(%d,%d,%d) angle=(%d,%d,%d)",
+			camera_position.vx, camera_position.vy, camera_position.vz,
+			camera_angle.vx, camera_angle.vy, camera_angle.vz);
 		StereoLog_Write("eye L: OT prims=%d", (int)(current->primptr - current->primtab));
 
 		current->draw.dfe = 0;
@@ -1719,8 +1725,14 @@ void DrawGame(void)
 		current = &MPBuff[0][1 - parity];
 		ClearOTagR((u_long*)current->ot, OTSIZE);
 		current->primptr = current->primtab;
+		StereoLog_Write("cam before R: pos=(%d,%d,%d) angle=(%d,%d,%d)",
+			camera_position.vx, camera_position.vy, camera_position.vz,
+			camera_angle.vx, camera_angle.vy, camera_angle.vz);
 		StereoCamera_Update(&player[0], STEREO_EYE_RIGHT);
 		RenderGame2(0);
+		StereoLog_Write("cam after  R: pos=(%d,%d,%d) angle=(%d,%d,%d)",
+			camera_position.vx, camera_position.vy, camera_position.vz,
+			camera_angle.vx, camera_angle.vy, camera_angle.vz);
 		StereoLog_Write("eye R: OT prims=%d", (int)(current->primptr - current->primtab));
 
 		current->draw.dfe = 0;
