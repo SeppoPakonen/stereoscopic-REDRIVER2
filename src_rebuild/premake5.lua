@@ -517,6 +517,53 @@ project "dx11_modeladapter"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 DirectInput8 input backend (T1.7): COM init + DirectInput8Create,
+-- keyboard/mouse/joystick devices (SetDataFormat/SetCooperativeLevel/Acquire),
+-- poll state (keys/mouse/joystick), and the DIK -> logical-key map mirroring
+-- the game's default PSX pad controls. Driven by dx11_input_test.cpp; verified
+-- headless (init/poll/map probes). Links dinput8 (DirectInput8Create) + ole32
+-- (CoInitializeEx).
+-- ---------------------------------------------------------------------------
+project "dx11_input"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_input.h",
+        "spike/dx11_input.c",
+        "spike/dx11_input_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "dinput8",
+            "dxguid",   -- IID_IDirectInput8A, GUID_SysKeyboard/Mouse, axis GUIDs
+            "ole32",
+            "user32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 shaders + render state (T1.4): universal VS + flat/gouraud textured PS,
 -- the PSX blend/depth-stencil/rasterizer states, and a per-draw flat-color CB.
 -- Driven by dx11_shaders_test.cpp on top of dx11_renderer + dx11_textures;

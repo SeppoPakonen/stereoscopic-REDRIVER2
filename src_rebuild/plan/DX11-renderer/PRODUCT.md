@@ -153,6 +153,18 @@ renderer in T1.5.
   per poly so same-material consecutive polys stay index-contiguous → the T1.5
   executor batches them. Harness: `dx11_modeladapter_test.cpp` (texture /
   gouraud / batch / sort / world / cull / blend probes, all PASS).
+- **`dx11_input.{h,c}`** (T1.7) — `Dx11Input`: the DX11 backend's native input
+  layer — game-agnostic DirectInput8 (`CoInitializeEx` + `DirectInput8Create`),
+  keyboard/mouse/joystick devices (`SetDataFormat`/`SetCooperativeLevel`/
+  `Acquire`, `DISCL_NONEXCLUSIVE | DISCL_BACKGROUND`), `Poll` into a
+  `Dx11InputState { keys[256]; mouse x/y/z + buttons; joyButtons[32] +
+  joyAxis[6] + joyConnected }` (lost devices re-acquired + zeroed), and
+  `Dx11Input_MapKey` mapping DIK scancodes to logical keys mirroring the game's
+  default PSX pad controls (square=X, circle=V, triangle=Z, cross=C, L1=LSHIFT,
+  L2=LCTRL, L3=LBRACKET, R1=RSHIFT, R2=RCTRL, R3=RBRACKET, select=SPACE,
+  start=RETURN, dpad=arrows). SDL2 input stays for the GL backends. Links
+  `dinput8` + `dxguid` + `ole32`. Harness: `dx11_input_test.cpp` (init/poll/map
+  probes, all PASS; the attached gamepad was enumerated).
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.
