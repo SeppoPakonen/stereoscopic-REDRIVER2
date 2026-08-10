@@ -401,3 +401,51 @@ project "dx11_foundation"
         targetsuffix "_dev"
         optimize "Speed"
         symbols "On"
+
+-- ---------------------------------------------------------------------------
+-- DX11 resource management (T1.2): per-frame vertex arena + dynamic VB, a
+-- constant-buffer arena for per-draw world matrices, and SRV/sampler binding.
+-- Driven by dx11_resources_test.cpp on top of the dx11_renderer foundation;
+-- verified headless (BMP capture + bounded-growth stats).
+-- ---------------------------------------------------------------------------
+project "dx11_resources"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_resources.h",
+        "spike/dx11_resources.c",
+        "spike/dx11_resources_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
