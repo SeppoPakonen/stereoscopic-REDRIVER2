@@ -355,3 +355,49 @@ project "dx11_spike"
         targetsuffix "_dev"
         optimize "Speed"
         symbols "On"
+
+-- ---------------------------------------------------------------------------
+-- DX11 renderer foundation (T1.1): standalone harness that drives the reusable
+-- dx11_renderer module (device/context/native window/swapchain/backbuffer RTV/
+-- depth-stencil/offscreen RTs + present/resize/-res). Proves the full T1.1
+-- stack headless via BMP capture, like the T0.5 spike.
+-- ---------------------------------------------------------------------------
+project "dx11_foundation"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_foundation.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"

@@ -26,7 +26,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 
 ## Phase 1 — Core DX11 renderer (M1)
 
-- [ ] **T1.1** DX11 device/context/swapchain + render targets — [T1.1](T1.1-dx11-device-context-swapchain.md)
+- [x] **T1.1** DX11 device/context/swapchain + render targets — [T1.1](T1.1-dx11-device-context-swapchain.md)
 - [ ] **T1.2** Resource management (VB/IB, CBs, SRVs, arena) — [T1.2](T1.2-resource-management.md)
 - [ ] **T1.3** Texture system: VRAM/tpage/clut → DX11 SRVs — [T1.3](T1.3-texture-system.md)
 - [ ] **T1.4** Shaders + render state — [T1.4](T1.4-shaders-and-render-state.md)
