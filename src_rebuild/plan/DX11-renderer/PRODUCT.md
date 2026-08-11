@@ -183,6 +183,16 @@ renderer in T1.5.
   `INDEP` (no cross-eye reuse), `IRES` (captured dims == configured res; PASS at
   320x240 and 480x360), `BACK` (green). The `GR_ResetOffscreenSize` workaround
   from the shared-GL path is not needed here.
+- **`dx11_stereo.{h,c}`** (T2.2) — `Dx11Stereo`: game-agnostic **per-eye
+  projection** math. `Dx11Stereo_EyeOffset` reuses the legacy
+  `StereoCamera_ApplyToRender` math verbatim (right = `(cos θ,0,sin θ)`, gain =
+  `sep*2`, left → `-right·gain`, right → `+right·gain`, swap negates);
+  `Dx11Stereo_ViewMatrix` builds the per-eye world→view matrix (eye offset
+  folded into the camera position) so the two eyes differ only by the lateral
+  offset; `Dx11Stereo_ApplyConvergence` shears the projection horizontally
+  (the legacy renderer-side `gStereoConvergence`). Harness:
+  `dx11_stereo_test.cpp` (offset/stable/swap/separation/convergence probes, all
+  PASS). Pure math, no extra links.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

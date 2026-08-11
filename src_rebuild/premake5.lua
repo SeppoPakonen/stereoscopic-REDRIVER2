@@ -664,6 +664,43 @@ project "dx11_eyetargets"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 per-eye projection math (T2.2): game-agnostic stereo camera module
+-- (yaw-derived lateral eye offset, per-eye world->view matrix, convergence
+-- shear). Driven by dx11_stereo_test.cpp; verified headless (offset / stable /
+-- swap / separation / convergence probes). Pure math, no extra links.
+-- ---------------------------------------------------------------------------
+project "dx11_stereo"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_stereo.h",
+        "spike/dx11_stereo.c",
+        "spike/dx11_stereo_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 shaders + render state (T1.4): universal VS + flat/gouraud textured PS,
 -- the PSX blend/depth-stencil/rasterizer states, and a per-draw flat-color CB.
 -- Driven by dx11_shaders_test.cpp on top of dx11_renderer + dx11_textures;
