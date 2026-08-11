@@ -100,12 +100,45 @@ float4 main(VSOut i) : SV_Target {
 }
 )";
 
+// Split-screen PS: maps 2 players x 2 eyes (t0..t3) into 4 quadrants.
+// cb0: x=split (H/V), y=eyeLayout (SBS/TB), z=swap.
+static const char *kSplitPS = R"(
+Texture2D t0 : register(t0);   // P1 left
+Texture2D t1 : register(t1);   // P1 right
+Texture2D t2 : register(t2);   // P2 left
+Texture2D t3 : register(t3);   // P2 right
+SamplerState samp : register(s0);
+cbuffer Sp : register(b0) { float4 sp; };
+struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
+float4 main(VSOut i) : SV_Target {
+    float2 uv = i.uv;
+    // Player region: H -> left/right half, V -> top/bottom half.
+    float px = (sp.x < 0.5) ? (uv.x < 0.5 ? 0.0 : 1.0) : (uv.y < 0.5 ? 0.0 : 1.0);
+    float2 luv = uv;
+    if (sp.x < 0.5) luv.x = frac(uv.x * 2.0); else luv.y = frac(uv.y * 2.0);
+    // Eye within the player region: SBS -> left/right, TB -> top/bottom.
+    float eye = (sp.y < 0.5) ? (luv.x < 0.5 ? 0.0 : 1.0) : (luv.y < 0.5 ? 0.0 : 1.0);
+    if (sp.z > 0.5) eye = 1.0 - eye;           // swap flips left/top eye
+    float2 euv = luv;
+    if (sp.y < 0.5) {
+        if (euv.x < 0.5) euv.x *= 2.0f; else euv.x = (euv.x - 0.5f) * 2.0f;
+    } else {
+        if (euv.y < 0.5) euv.y *= 2.0f; else euv.y = (euv.y - 0.5f) * 2.0f;
+    }
+    float4 L = (px < 0.5) ? t0.Sample(samp, euv) : t2.Sample(samp, euv);
+    float4 R = (px < 0.5) ? t1.Sample(samp, euv) : t3.Sample(samp, euv);
+    return eye > 0.5 ? R : L;
+}
+)";
+
 struct Dx11Composite {
     ID3D11Device        *dev;
     ID3D11DeviceContext *ctx;
     ID3D11VertexShader  *vs;
     ID3D11PixelShader   *ps;
+    ID3D11PixelShader   *psSplit;
     ID3D11Buffer        *cbParams; // b0
+    ID3D11Buffer        *cbSplit;  // b0 (split pass)
     ID3D11SamplerState  *sampler;  // point
     ID3D11RasterizerState *rsNoCull;
     ID3D11DepthStencilState *dsDisabled;
@@ -146,13 +179,15 @@ Dx11Composite *Dx11Composite_Create(ID3D11Device *dev, ID3D11DeviceContext *ctx,
     D3D11_DEPTH_STENCIL_DESC dsd = {};
     D3D11_BLEND_DESC bd = {};
     float zero[4] = { 0, 0, 0, 0 };
-    ID3DBlob *vsBlob = NULL, *psBlob = NULL;
+    ID3DBlob *vsBlob = NULL, *psBlob = NULL, *psSplitBlob = NULL;
 
     if (CompileBlob(kVS, "main", "vs_4_0", &vsBlob)) { if (outResult) *outResult = DX11C_ERR_COMPILE; goto fail; }
     if (CompileBlob(kPS, "main", "ps_4_0", &psBlob)) { if (outResult) *outResult = DX11C_ERR_COMPILE; goto fail; }
+    if (CompileBlob(kSplitPS, "main", "ps_4_0", &psSplitBlob)) { if (outResult) *outResult = DX11C_ERR_COMPILE; goto fail; }
 
     if (FAILED(dev->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), NULL, &c->vs))) { if (outResult) *outResult = DX11C_ERR_DEVICE; goto fail; }
     if (FAILED(dev->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), NULL, &c->ps))) { if (outResult) *outResult = DX11C_ERR_DEVICE; goto fail; }
+    if (FAILED(dev->CreatePixelShader(psSplitBlob->GetBufferPointer(), psSplitBlob->GetBufferSize(), NULL, &c->psSplit))) { if (outResult) *outResult = DX11C_ERR_DEVICE; goto fail; }
 
     // Params CB (b0): (mode, swap) as a 16-byte DEFAULT buffer.
     cbd.ByteWidth = 16;
@@ -160,6 +195,9 @@ Dx11Composite *Dx11Composite_Create(ID3D11Device *dev, ID3D11DeviceContext *ctx,
     cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     cbsd.pSysMem = zero;
     if (FAILED(dev->CreateBuffer(&cbd, &cbsd, &c->cbParams))) { if (outResult) *outResult = DX11C_ERR_DEVICE; goto fail; }
+
+    // Split params CB (b0): (split, layout, swap).
+    if (FAILED(dev->CreateBuffer(&cbd, &cbsd, &c->cbSplit))) { if (outResult) *outResult = DX11C_ERR_DEVICE; goto fail; }
 
     // Point sampler (nearest, matching the legacy glBlitFramebuffer NEAREST).
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
@@ -185,13 +223,14 @@ Dx11Composite *Dx11Composite_Create(ID3D11Device *dev, ID3D11DeviceContext *ctx,
     bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     if (FAILED(dev->CreateBlendState(&bd, &c->blendNone))) { if (outResult) *outResult = DX11C_ERR_DEVICE; goto fail; }
 
-    vsBlob->Release(); psBlob->Release();
+    vsBlob->Release(); psBlob->Release(); psSplitBlob->Release();
     if (outResult) *outResult = DX11C_OK;
     return c;
 
 fail:
     if (vsBlob) vsBlob->Release();
     if (psBlob) psBlob->Release();
+    if (psSplitBlob) psSplitBlob->Release();
     Dx11Composite_Destroy(c);
     return NULL;
 }
@@ -203,7 +242,9 @@ void Dx11Composite_Destroy(Dx11Composite *c) {
     if (c->dsDisabled) c->dsDisabled->Release();
     if (c->rsNoCull) c->rsNoCull->Release();
     if (c->sampler) c->sampler->Release();
+    if (c->cbSplit) c->cbSplit->Release();
     if (c->cbParams) c->cbParams->Release();
+    if (c->psSplit) c->psSplit->Release();
     if (c->ps) c->ps->Release();
     if (c->vs) c->vs->Release();
     // dev/ctx are borrowed; do not Release.
@@ -229,6 +270,44 @@ void Dx11Composite_Composite(Dx11Composite *c, ID3D11DeviceContext *ctx,
     ctx->PSSetConstantBuffers(0, 1, &c->cbParams);
     ctx->PSSetShaderResources(0, 1, &eye0);
     ctx->PSSetShaderResources(1, 1, &eye1);
+    ctx->PSSetSamplers(0, 1, &c->sampler);
+    ctx->RSSetState(c->rsNoCull);
+    ctx->OMSetDepthStencilState(c->dsDisabled, 0);
+    ctx->OMSetBlendState(c->blendNone, NULL, 0xFFFFFFFF);
+
+    D3D11_VIEWPORT vp;
+    vp.TopLeftX = 0; vp.TopLeftY = 0;
+    vp.Width = (float)w; vp.Height = (float)h;
+    vp.MinDepth = 0.0f; vp.MaxDepth = 1.0f;
+    ctx->RSSetViewports(1, &vp);
+
+    ctx->Draw(3, 0);
+}
+
+void Dx11Composite_SplitComposite(Dx11Composite *c, ID3D11DeviceContext *ctx,
+                                  Dx11CompositeSplit split,
+                                  Dx11CompositeEyeLayout layout, int swap,
+                                  ID3D11ShaderResourceView *p1L,
+                                  ID3D11ShaderResourceView *p1R,
+                                  ID3D11ShaderResourceView *p2L,
+                                  ID3D11ShaderResourceView *p2R,
+                                  int w, int h) {
+    if (!c) return;
+    if (!ctx) ctx = c->ctx;
+    if (w <= 0) w = 1;
+    if (h <= 0) h = 1;
+
+    float sp[4] = { (float)split, (float)layout, (swap ? 1.0f : 0.0f), 0 };
+    ctx->UpdateSubresource(c->cbSplit, 0, NULL, sp, 0, 0);
+
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ctx->VSSetShader(c->vs, NULL, 0);
+    ctx->PSSetShader(c->psSplit, NULL, 0);
+    ctx->PSSetConstantBuffers(0, 1, &c->cbSplit);
+    ctx->PSSetShaderResources(0, 1, &p1L);
+    ctx->PSSetShaderResources(1, 1, &p1R);
+    ctx->PSSetShaderResources(2, 1, &p2L);
+    ctx->PSSetShaderResources(3, 1, &p2R);
     ctx->PSSetSamplers(0, 1, &c->sampler);
     ctx->RSSetState(c->rsNoCull);
     ctx->OMSetDepthStencilState(c->dsDisabled, 0);

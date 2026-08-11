@@ -73,6 +73,36 @@ void Dx11Composite_Composite(Dx11Composite *c, ID3D11DeviceContext *ctx,
                              ID3D11ShaderResourceView *eye1,
                              int w, int h);
 
+// 2-player split-screen layout: which half each player gets.
+typedef enum {
+    DX11C_SPLIT_H = 0,   // players in left/right halves
+    DX11C_SPLIT_V = 1,   // players in top/bottom halves
+} Dx11CompositeSplit;
+
+// Within each player's half, how the two eyes are laid out.
+typedef enum {
+    DX11C_EYE_SBS = 0,   // eyes side-by-side
+    DX11C_EYE_TB = 1,    // eyes top/bottom
+} Dx11CompositeEyeLayout;
+
+// ---------------------------------------------------------------------------
+// Split-screen composite (2 players x 2 eyes = 4 images)
+// ---------------------------------------------------------------------------
+// Composites four eye SRVs (P1-L, P1-R, P2-L, P2-R) into the backbuffer
+// quadrants: `split` picks the player halves (H = left/right, V = top/bottom),
+// `layout` picks each player's eye arrangement within their half (SBS/TB),
+// and `swap` flips which eye fills each player's left/top eye slot. The caller
+// must have already bound the target RTV (e.g. the backbuffer). Any SRV may be
+// NULL (samples black). `w`/`h` are the target dimensions.
+void Dx11Composite_SplitComposite(Dx11Composite *c, ID3D11DeviceContext *ctx,
+                                  Dx11CompositeSplit split,
+                                  Dx11CompositeEyeLayout layout, int swap,
+                                  ID3D11ShaderResourceView *p1L,
+                                  ID3D11ShaderResourceView *p1R,
+                                  ID3D11ShaderResourceView *p2L,
+                                  ID3D11ShaderResourceView *p2R,
+                                  int w, int h);
+
 #ifdef __cplusplus
 }
 #endif

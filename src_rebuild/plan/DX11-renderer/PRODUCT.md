@@ -208,11 +208,18 @@ renderer in T1.5.
   ported verbatim from the legacy shader sources — `ANAGLYPH` (red-cyan),
   `ANAGLYPH_FULLCOLOR` (luminance blend), `INTERLACED` (odd rows = eye0),
   `POLARIZED` (complementary scanlines), `CHECKERBOARD` (`mod(x+y,2)` interleave);
-  `swap` flips the channel/eye assignment. The per-pixel pass is the foundation
-  for Phase 3's color modes/split-screen. Harness: `dx11_composite_test.cpp`
-  (sbs/tb/swap/mono + anaglyph/interlaced/polarized/checkerboard probes, all
-  PASS at 800x600 and 1280x720). Links `d3d11`+`dxgi`+`d3dcompiler`+`user32`+
-  `gdi32`.
+  `swap` flips the channel/eye assignment. A **4-SRV split pass**
+  (`Dx11Composite_SplitComposite`, T3.2) maps 2 players x 2 eyes into the
+  backbuffer quadrants (horizontal/vertical player split × SBS/TB eye layout,
+  with swap). The per-pixel pass is the foundation for Phase 3's color
+  modes/split-screen. Harness: `dx11_composite_test.cpp` (sbs/tb/swap/mono +
+  anaglyph/interlaced/polarized/checkerboard probes, all PASS at 800x600 and
+  1280x720). Links `d3d11`+`dxgi`+`d3dcompiler`+`user32`+`gdi32`.
+- **`dx11_splitscreen_test.cpp`** (T3.2) — **split-screen verification harness**:
+  creates four distinct solid-color eye images (P1-L red, P1-R green, P2-L
+  blue, P2-R yellow) and verifies `Dx11Composite_SplitComposite` maps them into
+  the four backbuffer quadrants for every split×layout (H_SBS / H_TB / V_SBS /
+  V_TB) and that swap flips the eye assignment. Probes: all PASS.
 - **`dx11_stereoscene_test.cpp`** (T2.4) — **right-eye-map verification harness**:
   renders a representative scene (a large map/terrain quad + a car quad) into
   BOTH per-eye RTs through the stereo path (`Dx11Stereo_ViewMatrix` per-eye view

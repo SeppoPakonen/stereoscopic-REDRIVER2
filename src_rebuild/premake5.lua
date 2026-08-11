@@ -758,6 +758,55 @@ project "dx11_stereo"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 split-screen (T3.2): 2 players x 2 eyes = 4 images composited into the
+-- backbuffer quadrants (horizontal/vertical player split x SBS/TB eye layout,
+-- with swap), as a 4-SRV split pass on top of dx11_composite. Driven by
+-- dx11_splitscreen_test.cpp; verified headless (h/v x sbs/tb + swap probes).
+-- Links d3d11/dxgi/d3dcompiler/user32/gdi32.
+-- ---------------------------------------------------------------------------
+project "dx11_splitscreen"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_composite.h",
+        "spike/dx11_composite.c",
+        "spike/dx11_splitscreen_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 stereo-scene / right-eye verification (T2.4): renders a representative
 -- scene (map/terrain quad + car quad) into BOTH per-eye RTs through the stereo
 -- path (Dx11Stereo_ViewMatrix per-eye view + T2.1 independent eye RTs) and
