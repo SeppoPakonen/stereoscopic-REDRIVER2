@@ -162,7 +162,8 @@ Each contains:
 The renderer rewrite (plan docs in `src_rebuild/plan/DX11-renderer/`) replaces the
 PSX OT/primitive renderer with a **standard DX11 renderer stack** fed by a
 world-space **draw-command list**, with the legacy PsyX GL path and a modern GL
-backend kept selectable. Phase 4 (T4.1–T4.5) is **complete**:
+backend kept selectable. Phase 4 (T4.1–T4.6) + the in-game renderer integration
+slice (T5.1) are **complete**:
 
 - **Multi-renderer selection**: `-renderer dx11` (default) / `-renderer psyx`
   (legacy) / `-renderer gl` (modern). All three resolve in `renderer.h`
@@ -182,8 +183,16 @@ backend kept selectable. Phase 4 (T4.1–T4.5) is **complete**:
   and stereo-state-independent; parity with the psyx reference.
 - **Modern GL backend**: `gl_renderer.{h,c}` (SDL + GL 3.3 core + glad,
   VAO/VBO/IBO + GLSL shaders + ortho projection — not the PSX primitive model) +
-  `gl_nonstereo_test.cpp` A/B vs DX11 (identical output). Wired into the game
-  build + registry in T4.5.
+  `gl_nonstereo_test.cpp` A/B vs DX11 (identical output) + `gl_stereo_test.cpp`
+  (per-eye FBOs + SBS/TB/MONO composite, T4.6). Wired into the game build +
+  registry in T4.5.
+- **In-game renderer integration**: `dx11_gamefeed.{h,c}` (T5.1) — the renderer
+  half of `DrawGame → draw-command → per-eye → composite`: consumes the game's
+  real `DrawCommand[]` list, converts `MODEL` flat-quad polys
+  (`PL_POLYFT4`, `id & 31` ∈ {11,21,23}) via `Dx11ModelAdapter`, and renders
+  per-eye → composite. Verified headless with a synthetic map+car scene
+  (`dx11_gamefeed_test.cpp`, GAMEFEED=PASS). The plot-function feed rewiring
+  (real game geometry → `DrawCommand` list) is the remaining integration half.
 
 Build: `premake5 gmake2 --os=windows` + `mingw32-make <proj>
 config=release_dev_x86` (32-bit mingw32; the game's known-good PsyCross path).
@@ -193,8 +202,9 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 ## Next Steps for Future Development
 
-1. Full in-game `DrawGame` → draw-command → DX11/GL → per-eye → composite rewiring
-   (the core integration; the standalone A/B slices are done).
+1. Plot-function feed rewiring: real game geometry (RenderModel/DrawCar/DrawTILES
+   etc.) into the `DrawCommand` list — the renderer half of the in-game path is
+   done (T5.1 `dx11_gamefeed`); needs a running game to verify.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.

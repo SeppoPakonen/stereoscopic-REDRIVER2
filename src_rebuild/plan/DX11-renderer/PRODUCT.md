@@ -332,5 +332,23 @@ stack.)
   DX11 per-eye RT + composite. All PASS. (Anaglyph/interlaced/polarized/
   checkerboard color modes + split-screen are further GL follow-ups.)
 
+**In-game renderer integration (T5.1):** the renderer half of
+"DrawGame → draw-command → per-eye → composite" — the module DrawGame's
+`-renderer dx11` branch calls to render the game's real `DrawCommand` feed.
+- **`dx11_gamefeed.{h,c}`** (T5.1) — a game-aware DX11 renderer integration:
+  `Dx11GameFeed_ModelToMesh` converts a `MODEL`'s flat-textured-quad polys
+  (`PL_POLYFT4`, poly type `id & 31` ∈ {11,21,23}, stride `PolySizes[type]`) into
+  the `Dx11ModelAdapter`'s raw mesh; `Dx11GameFeed_RenderFrame` consumes a real
+  `DrawCommand[]` list and drives the full pipeline — per-command
+  `ModelToMesh` + `Dx11ModelAdapter_Submit` → executor → `Dx11Stereo_ViewMatrix`
+  per-eye → eye RTs → SBS/TB/MONO composite → backbuffer BMP. `MATRIX` world →
+  float row-vector conversion (P^t convention). The plot-function feed (real
+  game geometry into the `DrawCommand` list) is the remaining integration half.
+- **`dx11_gamefeed_test.cpp`** (T5.1) — harness: builds a synthetic map (green)
+  + car (red) as real `MODEL`/`DrawCommand` objects and verifies
+  `MAP_L`/`MAP_R` (map present in both eyes), `CAR_L`/`CAR_R`, and `MONO`
+  (base scene) — TOTAL_FAILS=0 GAMEFEED=PASS. Proves the game's draw-command
+  feed renders end-to-end through DX11 per-eye → composite.
+
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.
