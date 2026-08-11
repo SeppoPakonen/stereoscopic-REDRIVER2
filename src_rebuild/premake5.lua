@@ -1113,6 +1113,58 @@ project "gl_nonstereo"
         optimize "Speed"
         symbols "On"
 
+
+-- ---------------------------------------------------------------------------
+-- DX11 GL per-eye stereo + composite parity (T4.6): extends gl_renderer with
+-- per-eye offscreen FBOs + a fullscreen SBS/TB/MONO composite (mirroring DX11
+-- T2.1/T2.3). Driven by gl_stereo_test.cpp on gl_renderer + glad.c; links
+-- opengl32 + SDL2. Verified headless (sbs/tb/swap/mono probes).
+-- ---------------------------------------------------------------------------
+project "gl_stereo"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/gl_renderer.h", "spike/gl_renderer.c",
+        "spike/gl_stereo_test.cpp",
+        "PsyCross/src/render/glad.c",
+    }
+
+    includedirs {
+        "spike",
+        "PsyCross/include",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter {"system:Windows", "toolset:gcc"}
+        includedirs {
+            os.getenv("MINGW32_SDL2_INCLUDE") or ((os.getenv("MINGW32_INCLUDE") or "/usr/local/include").."/SDL2"),
+            os.getenv("MINGW32_INCLUDE") or "/usr/local/include",
+        }
+        links {
+            "opengl32",
+            "SDL2",
+        }
+        libdirs {
+            os.getenv("MINGW32_LIB") or "/usr/local/lib",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
 -- ---------------------------------------------------------------------------
 -- DX11 dual-backend A/B, psyx side (T4.2): the reference/fallback backend. Links
 -- ONLY the PsyCross GL primitive path (no DX11 sources) and renders the common

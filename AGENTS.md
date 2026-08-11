@@ -193,9 +193,10 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 ## Next Steps for Future Development
 
-1. Per-eye stereo / composite parity for the modern GL backend (`-renderer gl`).
-2. Full in-game `DrawGame` → draw-command → DX11/GL → per-eye → composite rewiring
+1. Full in-game `DrawGame` → draw-command → DX11/GL → per-eye → composite rewiring
    (the core integration; the standalone A/B slices are done).
+2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
+   + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
 4. Comprehensive regression testing.
 5. User documentation.
@@ -204,5 +205,5 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 **Last Updated**: 2026-08-11
 **Phase**: 4 (Integration & cleanup — renderer rewrite)
-**Status**: Phase 4 complete (T4.1–T4.5); launcher + stereo GUI working, DX11 +
-modern GL backends selectable and A/B-verified
+**Status**: Phase 4 complete (T4.1–T4.6); launcher + stereo GUI working, DX11 +
+modern GL backends selectable, mono/per-eye/stereo-composite A/B-verified

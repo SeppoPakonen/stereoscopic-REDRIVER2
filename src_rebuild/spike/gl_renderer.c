@@ -1,12 +1,13 @@
-// gl_renderer.c — T4.4 modern OpenGL mono-path renderer module.
+// gl_renderer.c — T4.4/T4.6 modern OpenGL renderer module (mono path + stereo).
 //
 // Implements GlRenderer (see gl_renderer.h): SDL window + OpenGL 3.3
 // core-profile context, glad loader, a VAO + interleaved pos/color VBO + indexed
 // EBO, a GLSL 150 core VS/FS pair, an orthographic screen->NDC projection
-// (column-major, y-flip), and a per-frame render of screen-space flat quads
-// directly to the default framebuffer with a glReadPixels -> BMP capture (before
-// the swap). This is the GL mirror of the DX11 mono path (T4.3) — a standard
-// renderer stack, not the PSX primitive/OT model.
+// (column-major, y-flip), a per-frame render of screen-space flat quads to a
+// target (default framebuffer or a per-eye offscreen FBO), a glReadPixels -> BMP
+// capture (before the swap), and a fullscreen-triangle SBS/TB/MONO stereo
+// composite (T4.6). This is the GL mirror of the DX11 stack (mono + per-eye RT +
+// composite) — a standard renderer stack, not the PSX primitive/OT model.
 
 #include "gl_renderer.h"
 
@@ -40,6 +41,41 @@ static const char *FS_SRC =
     "  fragColor = vec4(vColor, 1.0);\n"
     "}\n";
 
+// Composite: a fullscreen triangle generated from gl_VertexID (no VBO), sampling
+// eye0/eye1 with a nearest sampler into SBS/TB/MONO halves (mirrors the DX11
+// dx11_composite PS). uMode: 0=SBS, 1=TB, 2=MONO. uSwap flips the left/top eye.
+static const char *COMP_VS_SRC =
+    "#version 150 core\n"
+    "out vec2 vUv;\n"
+    "void main(){\n"
+    "  vec2 p;\n"
+    "  if (gl_VertexID == 0) p = vec2(-1.0, -1.0);\n"
+    "  else if (gl_VertexID == 1) p = vec2(3.0, -1.0);\n"
+    "  else p = vec2(-1.0, 3.0);\n"
+    "  gl_Position = vec4(p, 0.0, 1.0);\n"
+    "  vUv = vec2((p.x + 1.0) * 0.5, (1.0 - p.y) * 0.5);\n"
+    "}\n";
+
+static const char *COMP_FS_SRC =
+    "#version 150 core\n"
+    "in vec2 vUv;\n"
+    "out vec4 fragColor;\n"
+    "uniform sampler2D uEye0;\n"
+    "uniform sampler2D uEye1;\n"
+    "uniform int uMode;\n"
+    "uniform int uSwap;\n"
+    "void main(){\n"
+    "  vec2 uv = vUv;\n"
+    "  if (uMode == 2) { fragColor = vec4(texture(uEye0, uv).rgb, 1.0); return; }\n"
+    "  int first;\n"
+    "  if (uMode == 0) first = (uv.x < 0.5) ? 0 : 1;\n"
+    "  else first = (uv.y < 0.5) ? 0 : 1;\n"
+    "  if (uSwap == 1) first = 1 - first;\n"
+    "  if (uMode == 0) uv.x = (uv.x < 0.5) ? uv.x * 2.0 : (uv.x - 0.5) * 2.0;\n"
+    "  else uv.y = (uv.y < 0.5) ? uv.y * 2.0 : (uv.y - 0.5) * 2.0;\n"
+    "  fragColor = vec4((first == 0 ? texture(uEye0, uv) : texture(uEye1, uv)).rgb, 1.0);\n"
+    "}\n";
+
 struct GlRenderer {
     SDL_Window *win;
     SDL_GLContext ctx;
@@ -47,6 +83,13 @@ struct GlRenderer {
     GLint uProj;
     GLuint vao, vbo, ebo;
     int width, height;
+    int internalW, internalH;
+    int curW, curH;          // current target size (for projection)
+    // Per-eye offscreen targets (T4.6).
+    GLuint eyeFBO[2], eyeTex[2];
+    GLuint compProg;
+    GLint compVAO;
+    GLint uEye0, uEye1, uMode, uSwap;
 };
 
 // ---------------------------------------------------------------------------
@@ -181,12 +224,16 @@ GlRenderer *GlRenderer_Create(const GlRendererConfig *cfg) {
     r->ctx = ctx;
     r->width = cfg->width;
     r->height = cfg->height;
+    r->internalW = cfg->internalW ? cfg->internalW : cfg->width;
+    r->internalH = cfg->internalH ? cfg->internalH : cfg->height;
+    r->curW = cfg->width;
+    r->curH = cfg->height;
 
     r->program = LinkProgram(VS_SRC, FS_SRC);
     if (!r->program) { GlRenderer_Destroy(r); return NULL; }
     r->uProj = glGetUniformLocation(r->program, "uProj");
 
-    // VAO + interleaved pos/color VBO + indexed EBO.
+    // Quad VAO + interleaved pos/color VBO + indexed EBO.
     glGenVertexArrays(1, &r->vao);
     glBindVertexArray(r->vao);
     glGenBuffers(1, &r->vbo);
@@ -199,11 +246,51 @@ GlRenderer *GlRenderer_Create(const GlRendererConfig *cfg) {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(2 * sizeof(float)));
     glBindVertexArray(0);
 
+    // Composite program (fullscreen triangle via gl_VertexID -> empty VAO).
+    r->compProg = LinkProgram(COMP_VS_SRC, COMP_FS_SRC);
+    if (!r->compProg) { GlRenderer_Destroy(r); return NULL; }
+    glGenVertexArrays(1, (GLuint *)&r->compVAO);
+    glUseProgram(r->compProg);
+    r->uEye0 = glGetUniformLocation(r->compProg, "uEye0");
+    r->uEye1 = glGetUniformLocation(r->compProg, "uEye1");
+    r->uMode = glGetUniformLocation(r->compProg, "uMode");
+    r->uSwap = glGetUniformLocation(r->compProg, "uSwap");
+    glUniform1i(r->uEye0, 0);
+    glUniform1i(r->uEye1, 1);
+    glUseProgram(0);
+
+    // Per-eye offscreen FBOs (RGBA8, internal res, nearest sampling).
+    glGenTextures(2, r->eyeTex);
+    glGenFramebuffers(2, r->eyeFBO);
+    for (int e = 0; e < 2; ++e) {
+        glBindTexture(GL_TEXTURE_2D, r->eyeTex[e]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, r->internalW, r->internalH, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindFramebuffer(GL_FRAMEBUFFER, r->eyeFBO[e]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                               r->eyeTex[e], 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            fprintf(stderr, "gl_renderer: eye FBO %d incomplete\n", e);
+            GlRenderer_Destroy(r);
+            return NULL;
+        }
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     return r;
 }
 
 void GlRenderer_Destroy(GlRenderer *r) {
     if (!r) return;
+    if (r->compProg) glDeleteProgram(r->compProg);
+    if (r->compVAO) glDeleteVertexArrays(1, (GLuint *)&r->compVAO);
+    if (r->eyeFBO[0]) glDeleteFramebuffers(2, r->eyeFBO);
+    if (r->eyeTex[0]) glDeleteTextures(2, r->eyeTex);
     if (r->program) glDeleteProgram(r->program);
     if (r->ebo) glDeleteBuffers(1, &r->ebo);
     if (r->vbo) glDeleteBuffers(1, &r->vbo);
@@ -216,6 +303,8 @@ void GlRenderer_Destroy(GlRenderer *r) {
 
 int GlRenderer_GetWidth(const GlRenderer *r) { return r->width; }
 int GlRenderer_GetHeight(const GlRenderer *r) { return r->height; }
+int GlRenderer_GetInternalWidth(const GlRenderer *r) { return r->internalW; }
+int GlRenderer_GetInternalHeight(const GlRenderer *r) { return r->internalH; }
 
 // ---------------------------------------------------------------------------
 // Capability probe: can a modern GL 3.3 core context be created + glad loaded?
@@ -241,20 +330,40 @@ int GlRenderer_Available(void) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-frame render: build the vertex/index arrays, draw once, capture to BMP.
+// Target selection.
 // ---------------------------------------------------------------------------
-int GlRenderer_RenderFrame(GlRenderer *r, const GlQuad *quads, int numQuads,
-                           const char *bmpOut) {
-    int W = r->width, H = r->height;
+void GlRenderer_BindOffscreen(GlRenderer *r, int eye) {
+    if (eye < 0 || eye > 1) return;
+    glBindFramebuffer(GL_FRAMEBUFFER, r->eyeFBO[eye]);
+    glViewport(0, 0, r->internalW, r->internalH);
+    r->curW = r->internalW;
+    r->curH = r->internalH;
+}
+
+void GlRenderer_BindDefault(GlRenderer *r) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, r->width, r->height);
+    r->curW = r->width;
+    r->curH = r->height;
+}
+
+void GlRenderer_BeginDraw(GlRenderer *r) {
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+// Draw `numQuads` quads to the current target (r->curW/curH). Shared by the
+// mono RenderFrame path and the per-eye offscreen path.
+void GlRenderer_DrawQuads(GlRenderer *r, const GlQuad *quads, int numQuads) {
+    int W = r->curW, H = r->curH;
     float *verts = (float *)malloc((size_t)numQuads * 4 * 5 * sizeof(float));
     unsigned int *indices = (unsigned int *)malloc((size_t)numQuads * 6 * sizeof(unsigned int));
-    if (!verts || !indices) { free(verts); free(indices); return 1; }
+    if (!verts || !indices) { free(verts); free(indices); return; }
 
     for (int qi = 0; qi < numQuads; ++qi) {
         const GlQuad *q = &quads[qi];
         float x0 = q->x, y0 = q->y, x1 = q->x + q->w, y1 = q->y + q->h;
         float cr = q->r / 255.0f, cg = q->g / 255.0f, cb = q->b / 255.0f;
-        // 4 corners: TL, TR, BR, BL (winding irrelevant; culling disabled).
         float corner[4][2] = { { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } };
         for (int c = 0; c < 4; ++c) {
             float *v = verts + ((size_t)qi * 4 + c) * 5;
@@ -267,16 +376,12 @@ int GlRenderer_RenderFrame(GlRenderer *r, const GlQuad *quads, int numQuads,
         idx[3] = base + 0; idx[4] = base + 2; idx[5] = base + 3;
     }
 
-    glViewport(0, 0, W, H);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_CULL_FACE);   // two-sided (mirrors the DX11 twoSided quads)
     glDisable(GL_DEPTH_TEST);
 
     glUseProgram(r->program);
 
-    // Orthographic screen->NDC (column-major, m[col][row]): x 0..W -> -1..1,
-    // y 0..H (top-down) -> +1..-1.
+    // Orthographic screen->NDC (column-major, m[col][row]) for the current target.
     float m[16] = { 0 };
     m[0]  = 2.0f / W;                   // m[0][0]
     m[5]  = -2.0f / H;                  // m[1][1]
@@ -296,10 +401,37 @@ int GlRenderer_RenderFrame(GlRenderer *r, const GlQuad *quads, int numQuads,
                  indices, GL_STREAM_DRAW);
     glDrawElements(GL_TRIANGLES, (GLsizei)(numQuads * 6), GL_UNSIGNED_INT, 0);
 
-    // Read the default framebuffer BEFORE the swap. glReadPixels returns rows
-    // bottom-up; flip so the BMP is top-down (row 0 = screen top).
+    free(indices);
+    free(verts);
+}
+
+unsigned int GlRenderer_GetEyeTexture(GlRenderer *r, int eye) {
+    if (eye < 0 || eye > 1) return 0;
+    return r->eyeTex[eye];
+}
+
+void GlRenderer_Composite(GlRenderer *r, GlStereoMode mode, int swap) {
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glUseProgram(r->compProg);
+    glUniform1i(r->uMode, (int)mode);
+    glUniform1i(r->uSwap, swap ? 1 : 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, r->eyeTex[0]);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, r->eyeTex[1]);
+    glBindVertexArray((GLuint)r->compVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindVertexArray(0);
+}
+
+// Read the default framebuffer (must be bound) into a top-down BMP.
+static int CaptureDefault(GlRenderer *r, const char *bmpOut) {
+    int W = r->width, H = r->height;
     unsigned char *px = (unsigned char *)malloc((size_t)W * H * 4);
     unsigned char *bgr = (unsigned char *)malloc((size_t)W * H * 3);
+    if (!px || !bgr) { free(px); free(bgr); return 1; }
+    // glReadPixels returns rows bottom-up; flip so the BMP is top-down.
     glReadPixels(0, 0, W, H, GL_BGRA, GL_UNSIGNED_BYTE, px);
     for (int y = 0; y < H; ++y) {
         const unsigned char *src = px + (size_t)(H - 1 - y) * W * 4;
@@ -313,10 +445,22 @@ int GlRenderer_RenderFrame(GlRenderer *r, const GlQuad *quads, int numQuads,
     int rw = WriteBMP(bmpOut, W, H, bgr);
     free(bgr);
     free(px);
+    return rw;
+}
 
+int GlRenderer_CaptureDefaultToBMP(GlRenderer *r, const char *bmpOut) {
+    return CaptureDefault(r, bmpOut);
+}
+
+// ---------------------------------------------------------------------------
+// Mono frame render (T4.4): default framebuffer + capture to BMP.
+// ---------------------------------------------------------------------------
+int GlRenderer_RenderFrame(GlRenderer *r, const GlQuad *quads, int numQuads,
+                           const char *bmpOut) {
+    GlRenderer_BindDefault(r);
+    GlRenderer_BeginDraw(r);
+    GlRenderer_DrawQuads(r, quads, numQuads);
+    int rw = CaptureDefault(r, bmpOut);
     SDL_GL_SwapWindow(r->win);
-
-    free(indices);
-    free(verts);
     return rw;
 }

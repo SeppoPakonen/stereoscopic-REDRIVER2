@@ -303,26 +303,34 @@ verified as a correct, full-frame, stereo-state-independent render.
   stereo work (T2.1–T3.3) lives entirely in the per-eye/composite path and never
   leaks into the mono path.
 
-**Modern GL backend — mono slice verified (T4.4, wired T4.5):** a **modern
+**Modern GL backend — mono + per-eye stereo verified (T4.4–T4.6):** a **modern
 OpenGL backend** (`-renderer gl`, wired into the registry + `DrawGame` dispatch
 in T4.5) that mirrors the DX11 architecture — a standard renderer stack, NOT
 the PSX primitive/OT model. (The legacy `-renderer psyx` is the
 PSX-primitive GL path; the T4.4 GL path is the modern GL mirror of the DX11
 stack.)
-- **`gl_renderer.{h,c}`** (T4.4) — the **modern GL renderer module**: SDL window +
-  OpenGL 3.3 core-profile context, glad loader (`gladLoadGL`), a VAO + interleaved
-  pos/color VBO + indexed EBO, a GLSL 150 core VS/FS pair, an orthographic
-  screen→NDC projection (column-major, y-flip), a per-frame render of screen-space
-  flat quads directly to the default framebuffer, and a `glReadPixels` → BMP
-  capture (before swap). Links `opengl32` + `SDL2`; portable by construction
-  (SDL + glad are the same pieces the PsyCross GL path uses).
+- **`gl_renderer.{h,c}`** (T4.4, extended T4.6) — the **modern GL renderer
+  module**: SDL window + OpenGL 3.3 core-profile context, glad loader
+  (`gladLoadGL`), a VAO + interleaved pos/color VBO + indexed EBO, a GLSL 150
+  core VS/FS pair, an orthographic screen→NDC projection (column-major, y-flip),
+  a per-frame render of screen-space flat quads to a target (the default
+  framebuffer, or a per-eye offscreen FBO), a `glReadPixels` → BMP capture
+  (before swap), and a fullscreen-triangle **SBS/TB/MONO stereo composite**
+  (T4.6, mirroring the DX11 T2.3 composite). Links `opengl32` + `SDL2`; portable
+  by construction (SDL + glad are the same pieces the PsyCross GL path uses).
 - **`gl_nonstereo_test.cpp`** (T4.4) — **GL mono-path harness + DX11 A/B**: renders
   the T4.2 common world-state scene through the GL mono path and proves
   `GL_QUAD0..2` (each quad's centroid == its stored color), `FULL_FRAME`
   (a standard full-frame projection), and `DX11_PARITY` (3/3 quad centroids match
   the DX11 backend reference BMP — the GL backend reproduces the identical scene).
-  All PASS. Per-eye stereo/composite parity is the remaining GL follow-up (the
-  `-renderer gl` registry wiring is done in T4.5).
+  All PASS.
+- **`gl_stereo_test.cpp`** (T4.6) — **GL per-eye stereo + composite harness**:
+  renders a distinct scene per eye into the two per-eye offscreen FBOs (eye0 red,
+  eye1 blue) and composites them SBS/TB/MONO into the default framebuffer,
+  proving `SBS` (left=eye0, right=eye1), `TB` (top=eye0, bottom=eye1), `SWAP`
+  (swap flips), and `MONO` (eye0 pass-through) — the GL stereo parity with the
+  DX11 per-eye RT + composite. All PASS. (Anaglyph/interlaced/polarized/
+  checkerboard color modes + split-screen are further GL follow-ups.)
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.
