@@ -1660,6 +1660,9 @@ typedef struct {
 
 static Dx11GameDisplay g_dx11GameDisplay;
 
+// VRAM snapshot buffer for refreshing the DX11 texture staging (1024x512 u16).
+static unsigned short g_dx11VramCopy[DX11TEX_VRAM_W * DX11TEX_VRAM_H];
+
 static int Dx11Game_EnsureDisplay(void)
 {
 	if (g_dx11GameDisplay.tried)
@@ -1674,7 +1677,9 @@ static int Dx11Game_EnsureDisplay(void)
 	ID3D11Device* dev = Dx11Renderer_GetDevice(ren);
 	ID3D11DeviceContext* ctx = Dx11Renderer_GetContext(ren);
 	Dx11ResResult rsres;  Dx11Res* res = Dx11Res_Create(dev, ctx, NULL, &rsres);
-	Dx11TexResult tr;     Dx11Tex* tex = Dx11Tex_Create(dev, ctx, NULL, &tr);
+	Dx11TexConfig tcfg = Dx11Tex_DefaultConfig();
+	tcfg.max_textures = 512;   // full-page region bakes (one per page+clut)
+	Dx11TexResult tr;  Dx11Tex* tex = Dx11Tex_Create(dev, ctx, &tcfg, &tr);
 	Dx11ShadersResult sr; Dx11Shaders* sh = Dx11Shaders_Create(dev, ctx, &sr);
 	Dx11DrawCmdsResult cr; Dx11DrawCmds* cmds = Dx11DrawCmds_Create(dev, ctx, res, tex, sh, NULL, &cr);
 	Dx11CompositeResult cpr; Dx11Composite* comp = Dx11Composite_Create(dev, ctx, &cpr);
@@ -1693,10 +1698,23 @@ static int Dx11Game_EnsureDisplay(void)
 	return 1;
 }
 
-static int Dx11Game_TexResolveUntextured(void* user, unsigned char set, unsigned char id, Dx11ModelTexture* out)
+// T5.2 feed texture resolve: (texture_set, texture_id) -> the tpage/clut + the
+// FULL tpage region (page width 64/128/256 by format x 256 tall). The model UVs
+// are page-relative (0..255) and are scaled into this region by ModelToMesh.
+static int Dx11Game_TexResolve(void* user, unsigned char set, unsigned char id, Dx11ModelTexture* out)
 {
-	(void)user; (void)set; (void)id; (void)out;
-	return 1;   // untextured (white substitute) until real feed texture baking lands
+	(void)user;
+	if (set >= 128 || id >= 32)
+		return 1;   // untextured (white substitute) fallback
+	unsigned short tpage = texture_pages[set];
+	unsigned short clut = texture_cluts[set][id];
+	int fmt = (tpage >> 7) & 3;
+	int pageW = (fmt == 0) ? 64 : (fmt == 1) ? 128 : 256;
+	out->tpage = tpage;
+	out->clut = clut;
+	out->tex_x = 0; out->tex_y = 0;
+	out->width = pageW; out->height = 256;
+	return 0;
 }
 
 // Perspective RH projection (row-vector, column-major) — same as the T5.1 harness.
@@ -1719,6 +1737,12 @@ static void Dx11Game_RenderFrame(void)
 	if (!Dx11Game_EnsureDisplay())
 		return;
 
+	// Refresh the DX11 VRAM staging from the game's VRAM (textures load over
+	// time via spooling); the first bake of each page+clut decodes from this.
+	GR_ReadVRAM(g_dx11VramCopy, 0, 0, DX11TEX_VRAM_W, DX11TEX_VRAM_H);
+	Dx11Tex_CopyVRAM(g_dx11GameDisplay.tex, g_dx11VramCopy, 0, 0,
+	                 DX11TEX_VRAM_W, DX11TEX_VRAM_H, 0, 0);
+
 	// Camera: game world pos + yaw (game angle 4096 = 2*pi). The DX11 camera is
 	// yaw-only (Dx11Stereo_ViewMatrix); pitch/roll are ignored for now.
 	float camPos[3] = { (float)camera_position.vx, (float)camera_position.vy, (float)camera_position.vz };
@@ -1736,7 +1760,8 @@ static void Dx11Game_RenderFrame(void)
 	                         proj, DrawCmd_Data(), num, NULL /*cmdColors*/,
 	                         camPos, yawRad, 0.0f /*sep*/, 0 /*swap*/,
 	                         DX11C_MODE_MONO, NULL /*texUser*/,
-	                         Dx11Game_TexResolveUntextured, NULL /*bmpOut*/);
+	                         Dx11Game_TexResolve, texture_pages /*tpages*/,
+	                         NULL /*bmpOut*/);
 }
 #endif // _WIN32
 

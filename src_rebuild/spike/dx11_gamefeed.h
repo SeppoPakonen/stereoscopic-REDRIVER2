@@ -33,13 +33,17 @@ extern "C" {
 // Convert a MODEL's flat-textured-quad polys (PL_POLYFT4) into the adapter's raw
 // mesh. `verts`/`polys` are caller buffers (>= model->num_vertices / model->num_polys).
 // `flatRGB` is the flat color applied to every converted poly (the shading color
-// the game would compute for the model). Returns 0 on success. Only flat quad
-// polys are converted; other types are skipped (the walk still advances by its
-// PolySizes stride).
+// the game would compute for the model). `tpages` is the game's texture_pages[128]
+// array (or NULL): when non-NULL the per-poly UV X is scaled by the tpage format
+// (page width 64/128/256 texels / 256) so the tpage-page-relative UVs (0..255)
+// land in the full-page region the tex-resolve bakes; V is unchanged. Returns 0
+// on success. Only flat quad polys are converted; other types are skipped (the
+// walk still advances by its PolySizes stride).
 int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flatRGB[3],
                              Dx11ModelVertex *verts, int vertCap,
                              Dx11ModelPoly *polys, int polyCap,
-                             int *outVerts, int *outPolys);
+                             int *outVerts, int *outPolys,
+                             const unsigned short *tpages);
 
 // Render a DrawCommand[] list through the full DX11 path: for each command with a
 // mesh, convert + submit via Dx11ModelAdapter, then render both eyes into their
@@ -48,7 +52,8 @@ int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flat
 // is a pre-created Dx11Composite. `cmdColors[i]` is the flat color for command i
 // (NULL -> white); the real game would supply the shading color it computes per
 // model. `bmpOut` captures the composite backbuffer to a BMP (NULL -> skip; the
-// in-game consumer passes NULL). Returns 0 on success.
+// in-game consumer passes NULL). `tpages` is the game's texture_pages[128] (or
+// NULL for no UV scaling). Returns 0 on success.
 int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              Dx11Shaders *sh, Dx11DrawCmds *cmds,
                              Dx11Composite *composite,
@@ -58,6 +63,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              const float camPos[3], float yawRad, float sep,
                              int swap, Dx11CompositeMode mode,
                              void *texUser, Dx11ModelTexResolve texResolve,
+                             const unsigned short *tpages,
                              const char *bmpOut);
 
 #ifdef __cplusplus

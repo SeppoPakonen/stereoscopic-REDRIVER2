@@ -153,7 +153,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_SBS, NULL, TexResolve_Untextured,
-                             "dx11_gamefeed.bmp");
+                             NULL /*tpages*/, "dx11_gamefeed.bmp");
 
     int iw = 320, cy = 120;
     // NDC x = m[0][0] * (x / -z), m[0][0] = (1/tan(30deg)) / aspect = 1.299.
@@ -187,7 +187,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_MONO, NULL, TexResolve_Untextured,
-                             "dx11_gamefeed_mono.bmp");
+                             NULL /*tpages*/, "dx11_gamefeed_mono.bmp");
     int okMonoMap = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * mapCol, 120, &r, &g, &b) == 0 && IsGreen(r, g, b));
     int okMonoCar = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * carCol, 120, &r, &g, &b) == 0 && IsRed(r, g, b));
     fprintf(resf, "MONO map(%d,120)=%s car(%d,120)=%s %s\n",

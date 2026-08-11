@@ -382,9 +382,22 @@ guarded by `bmpOut` so the game passes NULL (no per-frame BMP). The `main.c`
 consumer (`Dx11GameDisplay` + `Dx11Game_EnsureDisplay` + `Dx11Game_RenderFrame`)
 lazily creates a cached `Dx11Renderer` (own window) + the full system, converts
 the game camera (`camera_position` → camPos, `camera_angle.vy` → yawRad) and the
-projection (from `FrAng`), and calls `Dx11GameFeed_RenderFrame` (MONO, untextured
-white resolve, `sep=0`). Verified by build-link + inspection. Follow-ups: real
-feed texture baking, pitch/roll camera, and a running-game A/B (user run).
+projection (from `FrAng`), and calls `Dx11GameFeed_RenderFrame` (MONO,
+`sep=0`). Verified by build-link + inspection. Follow-ups: pitch/roll camera,
+and a running-game A/B (user run).
+
+**Feed texture baking (T5.2):** the consumer's companion window now renders the
+terrain feed with **real PSX textures** instead of the white substitute.
+`Dx11GameFeed_ModelToMesh`/`RenderFrame` gained a `tpages` param (the game's
+`texture_pages[128]`) that scales each poly's UV X by the tpage page width
+(64/128/256 texels by format `/256`) — matching the legacy GL shader's per-format
+page mapping (4-bit ×0.25, 8-bit ×0.5, 16-bit ×1.0 in X, V 1:1). The game's
+`Dx11Game_TexResolve(set,id)` (main.c) returns the **full page region**
+`(0,0,pageW,256)` from `texture_pages[set]`/`texture_cluts[set][id]`; every frame
+`Dx11Game_RenderFrame` refreshes the `Dx11Tex` VRAM staging from the game VRAM
+(`GR_ReadVRAM` 1024×512 → `Dx11Tex_CopyVRAM`, so spooled textures are present at
+first bake); the bake cache cap is raised to 512. Verified by build-link +
+inspection + the dx11_gamefeed headless harness (GAMEFEED=PASS).
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

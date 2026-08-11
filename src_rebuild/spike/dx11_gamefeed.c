@@ -39,13 +39,20 @@ static const int kPolySizes[56] = {
 // && != 23` skip).
 #define IS_FLAT_QUAD(ptype) ((ptype) == 11 || (ptype) == 21 || (ptype) == 23)
 
+// Tpage page width (texels) and UV-X scale for the tpage format.
+static int PageWidthForTpage(unsigned short tpage) {
+    int fmt = (tpage >> 7) & 3;
+    return (fmt == 0) ? 64 : (fmt == 1) ? 128 : 256;
+}
+
 // ---------------------------------------------------------------------------
 // MODEL -> adapter raw mesh (flat-textured-quad subset).
 // ---------------------------------------------------------------------------
 int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flatRGB[3],
                              Dx11ModelVertex *verts, int vertCap,
                              Dx11ModelPoly *polys, int polyCap,
-                             int *outVerts, int *outPolys) {
+                             int *outVerts, int *outPolys,
+                             const unsigned short *tpages) {
     if (!model) return 1;
     int ov = 0, op = 0;
 
@@ -75,10 +82,22 @@ int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flat
                 // Game winding (vi0,vi1,vi3,vi2) = (v0,v1,v3,v2) = TL,TR,BR,BL.
                 mp->vi0 = poly->v0; mp->vi1 = poly->v1;
                 mp->vi3 = poly->v3; mp->vi2 = poly->v2;
-                mp->u0 = poly->uv0.u; mp->v0 = poly->uv0.v;
-                mp->u1 = poly->uv1.u; mp->v1 = poly->uv1.v;
-                mp->u2 = poly->uv2.u; mp->v2 = poly->uv2.v;
-                mp->u3 = poly->uv3.u; mp->v3 = poly->uv3.v;
+                if (tpages) {
+                    // Scale UV X from page-relative (0..255) into the full page
+                    // texel region (width = pageW) the resolve bakes; V is 1:1.
+                    int pageW = PageWidthForTpage(tpages[poly->texture_set]);
+                    mp->u0 = (unsigned char)((poly->uv0.u * pageW) >> 8);
+                    mp->u1 = (unsigned char)((poly->uv1.u * pageW) >> 8);
+                    mp->u2 = (unsigned char)((poly->uv2.u * pageW) >> 8);
+                    mp->u3 = (unsigned char)((poly->uv3.u * pageW) >> 8);
+                    mp->v0 = poly->uv0.v; mp->v1 = poly->uv1.v;
+                    mp->v2 = poly->uv2.v; mp->v3 = poly->uv3.v;
+                } else {
+                    mp->u0 = poly->uv0.u; mp->v0 = poly->uv0.v;
+                    mp->u1 = poly->uv1.u; mp->v1 = poly->uv1.v;
+                    mp->u2 = poly->uv2.u; mp->v2 = poly->uv2.v;
+                    mp->u3 = poly->uv3.u; mp->v3 = poly->uv3.v;
+                }
                 mp->r = flatRGB[0]; mp->g = flatRGB[1]; mp->b = flatRGB[2];
                 mp->shade = DX11SH_COLOR_FLAT;
                 mp->blend = DX11SH_BLEND_NONE;
@@ -134,6 +153,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              const float camPos[3], float yawRad, float sep,
                              int swap, Dx11CompositeMode mode,
                              void *texUser, Dx11ModelTexResolve texResolve,
+                             const unsigned short *tpages,
                              const char *bmpOut) {
     ID3D11DeviceContext *ctx = Dx11Renderer_GetContext(ren);
     int iw = Dx11Renderer_GetInternalWidth(ren), ih = Dx11Renderer_GetInternalHeight(ren);
@@ -167,7 +187,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
             int ov = 0, op = 0;
             unsigned char flat[3] = { 255, 255, 255 };
             if (cmdColors) { flat[0] = cmdColors[i][0]; flat[1] = cmdColors[i][1]; flat[2] = cmdColors[i][2]; }
-            Dx11GameFeed_ModelToMesh(dc->mesh, flat, verts, nv, mpolys, np, &ov, &op);
+            Dx11GameFeed_ModelToMesh(dc->mesh, flat, verts, nv, mpolys, np, &ov, &op, tpages);
             Dx11ModelMesh mesh = { verts, ov, mpolys, op };
             float world[4][4];
             MatWorldFromGte(&dc->world, world);

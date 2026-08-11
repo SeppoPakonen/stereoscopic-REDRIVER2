@@ -207,8 +207,10 @@ slice (T5.1) are **complete**:
   `drawcmd.c` gained `DrawCmd_Data()`; the `main.c` consumer (`Dx11GameDisplay`,
   `Dx11Game_EnsureDisplay`, `Dx11Game_RenderFrame`) lazily creates a cached
   `Dx11Renderer` (own window) + system, converts the game camera/projection, and
-  renders the feed (MONO, untextured white resolve for now — real feed texture
-  baking is a follow-up). Verified by build-link + inspection; a running-game A/B
+  renders the feed (MONO). The terrain feed now bakes **real tpage/clut textures**
+  from VRAM (`Dx11Game_TexResolve` → full-page regions; `Dx11GameFeed_ModelToMesh`
+  `tpages` UV-X scaling by format; per-frame `GR_ReadVRAM` → `Dx11Tex_CopyVRAM`
+  staging refresh). Verified by build-link + inspection; a running-game A/B
   requires a user run.
 
 Build: `premake5 gmake2 --os=windows` + `mingw32-make <proj>
@@ -221,9 +223,8 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 1. Finish the plot-function feed rewiring: cars (DrawCar chain), sprites/sky/
    effects. The terrain/tile feed (T5.2 core) + the DrawGame dx11 consumer (A/B
-   companion window) are done; the DX11 window currently shows the terrain feed
-   untextured (white) — real feed texture baking, pitch/roll camera, and a
-   running-game A/B are the immediate follow-ups.
+   companion window) + real feed texture baking are done; pitch/roll camera and
+   a running-game A/B are the immediate follow-ups.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
