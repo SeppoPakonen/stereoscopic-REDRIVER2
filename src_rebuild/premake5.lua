@@ -981,6 +981,60 @@ project "dx11_backendab_dx11"
         optimize "Speed"
         symbols "On"
 
+
+-- ---------------------------------------------------------------------------
+-- DX11 non-stereo regression (T4.3): verifies the DX11 MONO path (render the
+-- base view-projection directly into the swapchain backbuffer - no per-eye RT,
+-- no stereo composite) renders the base-game scene correctly, as a full-frame
+-- direct render, and pixel-identical whether or not a stereo config is present.
+-- Driven by dx11_nonstereo_test.cpp on the renderer/resources/textures/shaders/
+-- executor stack + the common T4.2 world-state; verified headless (mono/
+-- fullframe/stateindep/psyxparity probes).
+-- ---------------------------------------------------------------------------
+project "dx11_nonstereo"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_backendab_state.h",
+        "spike/dx11_nonstereo_test.cpp",
+        "spike/dx11_renderer.h", "spike/dx11_renderer.c",
+        "spike/dx11_resources.h", "spike/dx11_resources.c",
+        "spike/dx11_textures.h", "spike/dx11_textures.c",
+        "spike/dx11_shaders.h", "spike/dx11_shaders.c",
+        "spike/dx11_drawcmdexec.h", "spike/dx11_drawcmdexec.c",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
 -- ---------------------------------------------------------------------------
 -- DX11 dual-backend A/B, psyx side (T4.2): the reference/fallback backend. Links
 -- ONLY the PsyCross GL primitive path (no DX11 sources) and renders the common

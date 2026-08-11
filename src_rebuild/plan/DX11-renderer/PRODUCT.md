@@ -281,5 +281,22 @@ T4.2 binaries are built **separately** (`dx11_backendab_dx11` imports only
 versa, and the `-store`/`-load` A/B shows both reproduce the identical scene
 from the same world-state.
 
+**DX11 mono path verified (T4.3):** the DX11 renderer's **mono path** — the path
+the game uses when stereo is disabled (render the base view-projection DIRECTLY
+into the swapchain backbuffer — no per-eye RT, no stereo composite) — is
+verified as a correct, full-frame, stereo-state-independent render.
+- **`dx11_nonstereo_test.cpp`** (T4.3) — **non-stereo regression harness**: renders
+  the T4.2 common world-state scene through the mono path (one `MonoRenderer`
+  reused across frames, `BindBackbuffer` + `CaptureToBMP(NULL)` for the
+  backbuffer), and proves: `MONO_QUAD0..2` (each quad's centroid == its stored
+  color — the base scene renders correctly), `FULL_FRAME` (left/right bars span
+  the full height, centre square present — a full-frame direct render, not a
+  composite SBS/TB half-frame), `STATE_INDEP` (the mono frame is pixel-identical
+  whether a stereo config is present or absent — `differing_pixels=0`, stereo
+  work does not regress normal play), and `PSYX_PARITY` (3/3 quad centroids match
+  the T4.2 psyx reference BMP). All PASS. This is the regression gate proving the
+  stereo work (T2.1–T3.3) lives entirely in the per-eye/composite path and never
+  leaks into the mono path.
+
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.
