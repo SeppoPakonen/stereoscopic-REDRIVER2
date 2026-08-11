@@ -174,6 +174,15 @@ renderer in T1.5.
   (`HasOutput()`). OpenAL (`PsyX_SPUAL.cpp`) stays for the GL backends. Links
   `xaudio2_8` + `ole32`. Harness: `dx11_audio_test.cpp` (engine/voice/play/
   volpan probes, all PASS — 0.5 s sine buffer plays and drains).
+- **`dx11_eyetargets_test.cpp`** (T2.1) — **per-eye render-target verification
+  harness**: renders a distinct quad per eye into the two offscreen RTs
+  (`DX11R_OFFSCREEN_COUNT = 2`, `BindOffscreen(index)` with an
+  internal-resolution viewport, from T1.1) and asserts the RTs are independent
+  at a configurable internal resolution (`-ires`, not 320x240-locked) while the
+  backbuffer path stays separate. Probes: `EYE0`/`EYE1` (left red / right blue),
+  `INDEP` (no cross-eye reuse), `IRES` (captured dims == configured res; PASS at
+  320x240 and 480x360), `BACK` (green). The `GR_ResetOffscreenSize` workaround
+  from the shared-GL path is not needed here.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

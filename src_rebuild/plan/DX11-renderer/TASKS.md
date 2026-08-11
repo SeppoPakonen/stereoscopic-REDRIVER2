@@ -37,7 +37,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 
 ## Phase 2 — Stereo natively (M2)
 
-- [ ] **T2.1** Per-eye render targets — [T2.1](T2.1-per-eye-render-targets.md)
+- [x] **T2.1** Per-eye render targets — [T2.1](T2.1-per-eye-render-targets.md)
 - [ ] **T2.2** Per-eye projection (yaw-derived lateral offset) — [T2.2](T2.2-per-eye-projection.md)
 - [ ] **T2.3** SBS/TB composite in the renderer — [T2.3](T2.3-sbs-tb-composite.md)
 - [ ] **T2.4** Verify right-eye map issue is gone — [T2.4](T2.4-verify-right-eye-issue-gone.md)
