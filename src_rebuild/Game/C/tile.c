@@ -8,6 +8,8 @@
 
 #include "ASM/rndrasm.h"
 
+#include "../render/renderer.h"
+
 #ifdef DYNAMIC_LIGHTING
 void Tile1x1Lit(MODEL* model)
 {
@@ -299,6 +301,20 @@ void DrawTILES(PACKED_CELL_OBJECT** tiles, int tile_amount)
 			Tile1x1(pModel);
 #endif // DYNAMIC_LIGHTING
 		}
+
+#ifndef PSX
+		if (Renderer_IsDX11())
+		{
+			// T5.2 terrain/tile feed: submit a world-space DrawCommand for the
+			// selected LOD model (world rotation = matrixtable[yang], position =
+			// the tile's world pos, depth = Z). Legacy GTE path kept in parallel.
+			VECTOR worldPos;
+			worldPos.vx = ppco->pos.vx;
+			worldPos.vy = (ppco->pos.vy << 0x10) >> 0x11;
+			worldPos.vz = ppco->pos.vz;
+			PlotFeed_SubmitModel(pModel, (const MATRIX*)&matrixtable[yang], &worldPos, Z, 0);
+		}
+#endif
 	}
 	current->primptr = plotContext.primptr;
 }

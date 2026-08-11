@@ -350,5 +350,26 @@ stack.)
   (base scene) — TOTAL_FAILS=0 GAMEFEED=PASS. Proves the game's draw-command
   feed renders end-to-end through DX11 per-eye → composite.
 
+**Terrain/tile feed (T5.2, core slice):** the first **feed (producer) half** of
+the in-game path — real terrain/tile geometry into the `DrawCommand` arena.
+- **`PlotFeed_SubmitModel`** (draw.c, declared in draw.h) — builds + submits one
+  world-space `DrawCommand` for a selected LOD `MODEL`: `world` = world rotation
+  (`matrixtable[yang]` / `matrix`) + world position (`pos`), `material` fallback
+  from the model's first poly (`texture_pages`/`texture_cluts`), `sortKey` =
+  `z>>1` (mirrors the OT bucket), `flags` = opaque/two-sided/flat (+ translucent
+  when `PLOT_TRANSPARENT`). **World-space convention:** the renderer builds its
+  own per-eye view from the camera, so the feed passes the world transform, NOT
+  the camera-space `CompoundMatrix`/GTE.
+- **`RenderModel`** (draw.c) and **`DrawTILES`** (tile.c) — under
+  `Renderer_IsDX11()`, submit a command per model/tile (after LOD selection) in
+  **parallel with the legacy GTE draw** (non-breaking: the dx11-default game
+  keeps rendering until DrawGame consumes the feed).
+- **`RenderGame2`** (main.c) — `DrawCmd_BeginFrame()` under `Renderer_IsDX11()`
+  bounds the per-frame arena.
+- Verified by build-link + inspection (the game doesn't reach `DrawGame`
+  headless); the end-to-end renderer path is T5.1-proven. The consumer half
+  (DrawGame's dx11 branch calls `Dx11GameFeed_RenderFrame` and the GTE draw is
+  switched off) is the remaining integration step.
+
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

@@ -39,6 +39,7 @@
 #include "../render/stereo.h"
 #include "../render/stereo_compositor.h"
 #include "../render/renderer.h"
+#include "../render/drawcmd.h"
 #if defined(_WIN32)
 #include "dx11_renderer.h"
 #include "gl_renderer.h"
@@ -2482,6 +2483,13 @@ void RenderGame2(int view)
 	int fadeColour;
 	int i;
 	int notInDreaAndStevesEvilLair;
+
+#ifndef PSX
+	// T5.2 terrain/tile feed: reset the per-frame draw-command arena under
+	// `-renderer dx11`. The terrain/tile plot functions populate it in RenderGame2.
+	if (Renderer_IsDX11())
+		DrawCmd_BeginFrame();
+#endif
 
 	CurrentPlayerView = view;
 	InitCamera(&player[view]);

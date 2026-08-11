@@ -16,6 +16,9 @@
 #include "ASM/rndrasm.h"
 #include "event.h"
 
+#include "../render/renderer.h"
+#include "../render/drawcmd.h"
+
 MATRIX aspect =
 {
 	{
@@ -1195,10 +1198,79 @@ void PlotModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 }
 
 
+// T5.2 terrain/tile feed: build + submit a world-space DrawCommand for `model`
+// placed at worldRot * worldPos, under `-renderer dx11`. Mirrors the OT depth
+// bucket (z>>1) and plot flags. The legacy GTE path is untouched (called in
+// parallel until DrawGame consumes the feed).
+void PlotFeed_SubmitModel(MODEL* model, const MATRIX* worldRot, const VECTOR* worldPos, int z, int plotFlags)
+{
+	DrawCommand cmd;
+	memset(&cmd, 0, sizeof(cmd));
+
+	cmd.mesh = model;
+
+	if (worldRot)
+		cmd.world = *worldRot;
+	else
+		InitMatrix(cmd.world);
+
+	if (worldPos)
+	{
+		cmd.world.t[0] = worldPos->vx;
+		cmd.world.t[1] = worldPos->vy;
+		cmd.world.t[2] = worldPos->vz;
+	}
+
+	// Material fallback from the model's first poly (texture_set/texture_id);
+	// the renderer resolves the per-poly texture from the mesh regardless.
+	cmd.material.tpage = 0;
+	cmd.material.clut = 0xFFFF;
+	if (model && model->num_polys > 0)
+	{
+		const PL_POLYFT4* poly = GET_MODEL_DATA(PL_POLYFT4, model, poly_block);
+		if (poly->texture_set < 128)
+		{
+			cmd.material.tpage = texture_pages[poly->texture_set];
+			cmd.material.clut = texture_cluts[poly->texture_set][poly->texture_id & 31];
+		}
+	}
+	cmd.material.blendMode = (plotFlags & PLOT_TRANSPARENT) ? MATBLEND_TRANSLUCENT : MATBLEND_OPAQUE;
+	cmd.material.filter = 0;
+
+	cmd.sortKey = z >> 1;
+	cmd.flags = DRAWCMD_OPAQUE | DRAWCMD_TWOSIDED | DRAWCMD_FLAT;
+	if (plotFlags & PLOT_TRANSPARENT)
+		cmd.flags = (cmd.flags & ~DRAWCMD_OPAQUE) | DRAWCMD_TRANSLUCENT;
+
+	cmd.palette = -1;
+	cmd.subdiv = -1;
+
+	DrawCmd_Submit(&cmd);
+}
+
 // [D] [T]
 void RenderModel(MODEL* model, MATRIX* matrix, VECTOR* pos, int zBias, int flags, int subdiv, int nrot)
 {
 	int i;
+
+#ifndef PSX
+	if (Renderer_IsDX11())
+	{
+		// camera-space depth for the sort key (the renderer depth-tests opaque;
+		// this mirrors the OT bucket for later translucent use).
+		int z = 0;
+		if (pos)
+		{
+			int dx = pos->vx - camera_position.vx;
+			int dy = pos->vy - camera_position.vy;
+			int dz = pos->vz - camera_position.vz;
+			z = FIXEDH(inv_camera_matrix.m[0][2] * dx
+			         + inv_camera_matrix.m[1][2] * dy
+			         + inv_camera_matrix.m[2][2] * dz);
+		}
+		PlotFeed_SubmitModel(model, matrix, pos, z, flags);
+	}
+#endif
 
 	if (matrix != NULL)
 	{

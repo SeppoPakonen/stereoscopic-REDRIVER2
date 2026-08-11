@@ -110,5 +110,8 @@ extern void DrawAllTheCars(int view); // 0x000407D8
 
 extern void RenderModel(MODEL *model, MATRIX *matrix, VECTOR *pos, int zBias, int flags, int subdiv, int nrot); // 0x0004143C
 
+// T5.2 terrain/tile feed: submit a world-space DrawCommand for `model` under
+// `-renderer dx11` (worldRot * worldPos, OT-depth bucket z>>1, plot flags).
+extern void PlotFeed_SubmitModel(MODEL *model, const MATRIX *worldRot, const VECTOR *worldPos, int z, int plotFlags);
 
 #endif

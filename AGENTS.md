@@ -191,8 +191,16 @@ slice (T5.1) are **complete**:
   real `DrawCommand[]` list, converts `MODEL` flat-quad polys
   (`PL_POLYFT4`, `id & 31` ∈ {11,21,23}) via `Dx11ModelAdapter`, and renders
   per-eye → composite. Verified headless with a synthetic map+car scene
-  (`dx11_gamefeed_test.cpp`, GAMEFEED=PASS). The plot-function feed rewiring
-  (real game geometry → `DrawCommand` list) is the remaining integration half.
+  (`dx11_gamefeed_test.cpp`, GAMEFEED=PASS).
+- **Terrain/tile feed (T5.2 core slice)**: the first **feed (producer) half** of
+  the in-game path — `PlotFeed_SubmitModel` (draw.c) + `RenderModel` (draw.c) +
+  `DrawTILES` (tile.c) submit world-space `DrawCommand`s under `-renderer dx11`
+  (world rotation `matrixtable[yang]`/`matrix` + world `pos`; `sortKey = z>>1`,
+  opaque/two-sided/flat flags), with `DrawCmd_BeginFrame()` in `RenderGame2`
+  (main.c). The legacy GTE draw is kept in parallel (non-breaking until DrawGame
+  consumes the arena). Verified by build-link + inspection. Still to do: cars,
+  sprites/sky/effects, and the DrawGame dx11 branch that consumes the arena via
+  `Dx11GameFeed_RenderFrame` (switching the GTE draw off).
 
 Build: `premake5 gmake2 --os=windows` + `mingw32-make <proj>
 config=release_dev_x86` (32-bit mingw32; the game's known-good PsyCross path).
@@ -202,9 +210,11 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 ## Next Steps for Future Development
 
-1. Plot-function feed rewiring: real game geometry (RenderModel/DrawCar/DrawTILES
-   etc.) into the `DrawCommand` list — the renderer half of the in-game path is
-   done (T5.1 `dx11_gamefeed`); needs a running game to verify.
+1. Finish the plot-function feed rewiring: cars (DrawCar chain), sprites/sky/
+   effects, then the DrawGame dx11 branch that consumes the arena via
+   `Dx11GameFeed_RenderFrame` and switches the GTE draw off. The terrain/tile
+   core is done (T5.2 `PlotFeed_SubmitModel` + `RenderModel` + `DrawTILES`);
+   needs a running game to verify.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
@@ -215,5 +225,6 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 **Last Updated**: 2026-08-11
 **Phase**: 4 (Integration & cleanup — renderer rewrite)
-**Status**: Phase 4 complete (T4.1–T4.6); launcher + stereo GUI working, DX11 +
-modern GL backends selectable, mono/per-eye/stereo-composite A/B-verified
+**Status**: Phase 4 done (T4.1–T4.6) + T5.1 renderer integration + T5.2
+terrain/tile feed core; launcher + stereo GUI working, DX11 + modern GL
+backends selectable, mono/per-eye/stereo-composite A/B-verified
