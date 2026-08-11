@@ -1035,6 +1035,62 @@ project "dx11_nonstereo"
         optimize "Speed"
         symbols "On"
 
+
+-- ---------------------------------------------------------------------------
+-- DX11 modern-GL mono slice (T4.4): a modern OpenGL backend (SDL + GL 3.3
+-- core + glad, VAO/VBO/IBO + GLSL shaders + orthographic projection - NOT the
+-- PSX primitive model) that renders the same common world-state scene as the
+-- DX11 backend and A/B's against it. Driven by gl_renderer.{h,c} +
+-- gl_nonstereo_test.cpp on PsyCross/src/render/glad.c; links opengl32 + SDL2.
+-- ---------------------------------------------------------------------------
+project "gl_nonstereo"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_backendab_state.h",
+        "spike/gl_renderer.h", "spike/gl_renderer.c",
+        "spike/gl_nonstereo_test.cpp",
+        "PsyCross/src/render/glad.c",
+    }
+
+    includedirs {
+        "spike",
+        "PsyCross/include",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter {"system:Windows", "toolset:gcc"}
+        includedirs {
+            -- premake's `.."/SDL2"` concat mangles the path (inserts a space before
+            -- /SDL2); prefer a dedicated env var whose value already holds the dir.
+            os.getenv("MINGW32_SDL2_INCLUDE") or ((os.getenv("MINGW32_INCLUDE") or "/usr/local/include").."/SDL2"),
+            os.getenv("MINGW32_INCLUDE") or "/usr/local/include",
+        }
+        links {
+            "opengl32",
+            "SDL2",
+        }
+        libdirs {
+            os.getenv("MINGW32_LIB") or "/usr/local/lib",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
 -- ---------------------------------------------------------------------------
 -- DX11 dual-backend A/B, psyx side (T4.2): the reference/fallback backend. Links
 -- ONLY the PsyCross GL primitive path (no DX11 sources) and renders the common
