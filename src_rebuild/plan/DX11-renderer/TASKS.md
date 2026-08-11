@@ -50,7 +50,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 
 ## Phase 4 — Integration & cleanup (M4)
 
-- [ ] **T4.1** mingw32 build + headless harness with `-renderer` — [T4.1](T4.1-build-and-headless-harness.md)
+- [x] **T4.1** mingw32 build + headless harness with `-renderer` — [T4.1](T4.1-build-and-headless-harness.md)
 - [ ] **T4.2** Keep legacy `psyx` path selectable — [T4.2](T4.2-keep-psyx-selectable.md)
 - [ ] **T4.3** Non-stereo regression — [T4.3](T4.3-non-stereo-regression.md)
 - [ ] **T4.4** (stretch) Modern GL backend mirroring DX11 — [T4.4](T4.4-modern-gl-backend.md)

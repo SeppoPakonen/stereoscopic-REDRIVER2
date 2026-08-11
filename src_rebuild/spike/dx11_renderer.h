@@ -67,6 +67,14 @@ Dx11Renderer *Dx11Renderer_Create(const Dx11RendererConfig *cfg,
 void Dx11Renderer_Destroy(Dx11Renderer *r);
 
 // ---------------------------------------------------------------------------
+// Capability probe
+// ---------------------------------------------------------------------------
+// Returns nonzero if a Direct3D 11 device can be created on this machine (a
+// lightweight D3D11CreateDevice probe, released immediately). Used by the game
+// to decide whether the DX11 backend is usable. Never creates a window.
+int Dx11Renderer_Available(void);
+
+// ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 int Dx11Renderer_GetWindowWidth(const Dx11Renderer *r);

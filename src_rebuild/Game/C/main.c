@@ -39,6 +39,9 @@
 #include "../render/stereo.h"
 #include "../render/stereo_compositor.h"
 #include "../render/renderer.h"
+#if defined(_WIN32)
+#include "dx11_renderer.h"
+#endif
 #include "PsyX/PsyX_render.h"
 #include "overlay.h"
 #include "debris.h"
@@ -1643,14 +1646,21 @@ void DrawGame(void)
 	StereoLog_Open();
 
 	// --- Renderer backend dispatch (T0.1) ---
-	// The DX11 backend is the default but is not implemented yet (Phase 1+).
-	// Until the draw-command DX11 stack lands, both backends run the legacy
+	// The DX11 backend is the default but the full draw path is not wired yet
+	// (Phase 1+). The dx11 branch genuinely probes the DX11 stack and logs it;
+	// until the draw-command DX11 renderer lands, both backends run the legacy
 	// path so the game stays playable. This dispatch point is where the DX11
-	// render path is inserted in Phase 1.
-	if (Renderer_IsDX11())
-		StereoLog_Write("DrawGame: backend=dx11 (legacy fallback until Phase 1)");
-	else
+	// render path is inserted later.
+	if (Renderer_IsDX11()) {
+#if defined(_WIN32)
+		StereoLog_Write("DrawGame: backend=dx11 dx11_available=%d",
+		                Dx11Renderer_Available());
+#else
+		StereoLog_Write("DrawGame: backend=dx11 (not available on this platform)");
+#endif
+	} else {
 		StereoLog_Write("DrawGame: backend=psyx (legacy)");
+	}
 
 	// Initialize stereo compositor once (guard against multiple inits).
 	// DISABLED for now: the spatial on-screen split needs no compositor, and the

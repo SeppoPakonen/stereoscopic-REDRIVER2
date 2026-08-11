@@ -14,6 +14,24 @@
 
 #define DX11R_WNDCLASS "REDRIVER2_DX11Wnd"
 
+// Lightweight Direct3D 11 capability probe: can a device be created here?
+int Dx11Renderer_Available(void)
+{
+    ID3D11Device *dev = NULL;
+    ID3D11DeviceContext *ctx = NULL;
+    D3D_FEATURE_LEVEL fl = D3D_FEATURE_LEVEL_11_0;
+    HRESULT hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0,
+                                   &fl, 1, D3D11_SDK_VERSION, &dev, NULL, &ctx);
+    if (FAILED(hr)) {
+        // Try WARP (a software rasterizer) before giving up.
+        hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_WARP, NULL, 0,
+                               &fl, 1, D3D11_SDK_VERSION, &dev, NULL, &ctx);
+    }
+    if (dev) dev->Release();
+    if (ctx) ctx->Release();
+    return SUCCEEDED(hr) ? 1 : 0;
+}
+
 struct Dx11Renderer {
     HWND hwnd;
     HINSTANCE hinst;

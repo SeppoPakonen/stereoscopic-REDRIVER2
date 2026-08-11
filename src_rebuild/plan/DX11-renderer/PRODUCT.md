@@ -110,10 +110,12 @@ its own harness (mingw32 32-bit, `premake5 gmake2 --cc=gcc` +
 `mingw32-make <proj> config=release_x86`). Adopted into the game draw-command
 renderer in T1.5.
 
-- **`dx11_renderer.{h,c}`** (T1.1) — `Dx11Renderer`: device/context (11_0),
-  native Win32 window + DXGI swapchain, backbuffer RTV + D24 depth + viewport,
-  offscreen RT pair at internal resolution, begin-frame/present, resize,
-  backbuffer capture to BMP. Harness: `dx11_foundation.cpp`.
+- **`dx11_renderer.{h,c}`** (T1.1, **T4.1**) — `Dx11Renderer`: device/context
+  (11_0), native Win32 window + DXGI swapchain, backbuffer RTV + D24 depth +
+  viewport, offscreen RT pair at internal resolution, begin-frame/present,
+  resize, backbuffer capture to BMP. Also `Dx11Renderer_Available()` (T4.1) — a
+  lightweight D3D11CreateDevice+WARP probe used by the game's `DrawGame`
+  `-renderer dx11` dispatch. Harness: `dx11_foundation.cpp`.
 - **`dx11_resources.{h,c}`** (T1.2) — `Dx11Res`: per-frame vertex arena +
   dynamic VB/IB, per-draw world-CB pool (64-byte DEFAULT CB/slot, plain
   `VSSetConstantBuffers`) + view/proj CB, default point sampler + `BindSRV`,
@@ -226,6 +228,20 @@ renderer in T1.5.
   correct at every res (the perspective centre stays centred — unlike the PSX
   320x240 lock, which broke the projection at non-native res) and the captured
   dims match the configured res. Probes: `IRES`/`PROJ`/`SYMM` — all PASS.
+- **`dx11_rendererselect_test.cpp`** (T4.1) — **renderer-selection A/B harness**:
+  verifies the `-renderer dx11|psyx` selection (`Renderer_FromName` /
+  `Renderer_IsDX11` / `Renderer_IsPsyX` from `Game/render/renderer.h`) resolves
+  both backends and that `Dx11Renderer_Available()` reports the DX11 stack
+  usable. Used as the headless two-backend A/B slice when the full game cannot
+  reach the gameplay loop. Probes: `SELECT`/`FLAG`/`AVAIL` — all PASS.
+
+**Game build integration (T4.1):** the 8 core DX11 modules (`dx11_renderer`,
+`dx11_resources`, `dx11_textures`, `dx11_shaders`, `dx11_drawcmdexec`,
+`dx11_modeladapter`, `dx11_stereo`, `dx11_composite`) now compile into the
+`REDRIVER2` game binary (premake Windows filter: `spike/*` files +
+`d3d11`/`dxgi`/`d3dcompiler`/`user32`/`gdi32` links), and `DrawGame` genuinely
+dispatches on `-renderer dx11` (calls `Dx11Renderer_Available()`) vs
+`-renderer psyx`.
 - **`dx11_stereoscene_test.cpp`** (T2.4) — **right-eye-map verification harness**:
   renders a representative scene (a large map/terrain quad + a car quad) into
   BOTH per-eye RTs through the stereo path (`Dx11Stereo_ViewMatrix` per-eye view

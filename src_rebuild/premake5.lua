@@ -263,11 +263,31 @@ project "REDRIVER2"
             "platform/Windows/main.ico" 
         }
 
+        files {
+            "spike/dx11_renderer.h", "spike/dx11_renderer.c",
+            "spike/dx11_resources.h", "spike/dx11_resources.c",
+            "spike/dx11_textures.h", "spike/dx11_textures.c",
+            "spike/dx11_shaders.h", "spike/dx11_shaders.c",
+            "spike/dx11_drawcmdexec.h", "spike/dx11_drawcmdexec.c",
+            "spike/dx11_modeladapter.h", "spike/dx11_modeladapter.c",
+            "spike/dx11_stereo.h", "spike/dx11_stereo.c",
+            "spike/dx11_composite.h", "spike/dx11_composite.c",
+        }
+
         includedirs { 
             SDL2_DIR.."/include",
             OPENAL_DIR.."/include",
+            "spike",
 			JPEG_DIR.."/",
         }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
     
         filter {"system:Windows", "toolset:gcc"}
             includedirs {
@@ -835,6 +855,54 @@ project "dx11_ires"
 
     includedirs {
         "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
+-- DX11 renderer-selection A/B (T4.1): headless verification that the
+-- `-renderer dx11|psyx` selection (Renderer_FromName / Renderer_IsDX11 /
+-- Renderer_IsPsyX) resolves both backends and that Dx11Renderer_Available()
+-- reports the DX11 stack usable. Driven by dx11_rendererselect_test.cpp.
+-- ---------------------------------------------------------------------------
+project "dx11_rendererselect"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_rendererselect_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+        "Game",
+        "Game/render",
     }
 
     filter { "files:**.c", "files:**.C" }
