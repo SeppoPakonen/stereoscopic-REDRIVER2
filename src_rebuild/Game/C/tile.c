@@ -259,6 +259,8 @@ void DrawTILES(PACKED_CELL_OBJECT** tiles, int tile_amount)
 
 	tilePointers = (PACKED_CELL_OBJECT **)tiles;
 
+	int tileIndex = 0;
+
 	while (tile_amount--)
 	{
 		ppco = *tilePointers++;
@@ -307,14 +309,14 @@ void DrawTILES(PACKED_CELL_OBJECT** tiles, int tile_amount)
 		{
 			// T5.2 terrain/tile feed: submit a world-space DrawCommand for the
 			// selected LOD model (world rotation = matrixtable[yang], position =
-			// the tile's world pos, depth = Z). Legacy GTE path kept in parallel.
-			VECTOR worldPos;
-			worldPos.vx = ppco->pos.vx;
-			worldPos.vy = (ppco->pos.vy << 0x10) >> 0x11;
-			worldPos.vz = ppco->pos.vz;
-			PlotFeed_SubmitModel(pModel, (const MATRIX*)&matrixtable[yang], &worldPos, Z, 0);
+			// the tile's nearCell-resolved world pos, depth = Z). Legacy GTE
+			// path kept in parallel.
+			extern VECTOR model_tile_pos[];
+			PlotFeed_SubmitModel(pModel, (const MATRIX*)&matrixtable[yang],
+			                     &model_tile_pos[tileIndex], Z, 0);
 		}
 #endif
+		tileIndex++;
 	}
 	current->primptr = plotContext.primptr;
 }

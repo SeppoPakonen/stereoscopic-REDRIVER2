@@ -383,8 +383,7 @@ consumer (`Dx11GameDisplay` + `Dx11Game_EnsureDisplay` + `Dx11Game_RenderFrame`)
 lazily creates a cached `Dx11Renderer` (own window) + the full system, converts
 the game camera (`camera_position` → camPos, `camera_angle.vy` → yawRad) and the
 projection (from `FrAng`), and calls `Dx11GameFeed_RenderFrame` (MONO,
-`sep=0`). Verified by build-link + inspection. Follow-ups: pitch/roll camera,
-and a running-game A/B (user run).
+`sep=0`). Follow-up: pitch/roll camera.
 
 **Feed texture baking (T5.2):** the consumer's companion window now renders the
 terrain feed with **real PSX textures** instead of the white substitute.
@@ -398,6 +397,37 @@ page mapping (4-bit ×0.25, 8-bit ×0.5, 16-bit ×1.0 in X, V 1:1). The game's
 (`GR_ReadVRAM` 1024×512 → `Dx11Tex_CopyVRAM`, so spooled textures are present at
 first bake); the bake cache cap is raised to 512. Verified by build-link +
 inspection + the dx11_gamefeed headless harness (GAMEFEED=PASS).
+
+**In-game A/B verified (T5.2):** the real game was run (`-mission 50`, the
+repo's `data/DRIVER2` is only a stub — a full install at
+`J:\sblo\Pelit\PC\INSTALLED\Driver2` is required to reach `DrawGame`). Under
+`-renderer dx11` the game opens **two** windows — the SDL/PsyX window (full
+legacy scene) and the `REDRIVER2 DX11 (Phase 1)` companion window — and the
+companion now renders the **terrain feed** (grey sky, olive-green ground, road
+markers, a structure). `-renderer psyx` opens only the SDL window (legacy
+unchanged). The headless harness still passes (`GAMEFEED=PASS`). Running the
+game was the first exercise of the feed with real data and exposed three
+in-game-only bugs, all fixed:
+1. **Tile positions were packed, not nearCell-resolved** — `DrawMapPSX` now
+   stores each tile's `nearCell`-resolved world position in a new
+   `model_tile_pos[]` (parallel to `model_tile_ptrs[]`), and `DrawTILES`'s dx11
+   branch submits it instead of the raw `ppco->pos` (which was ~260,000 units
+   from the camera, beyond the far plane).
+2. **Camera view direction inverted vs the game's GTE** — the game builds its
+   view with `RotMatrixY(-yaw)`, so its forward is `+view z = (-sin,0,+cos)`;
+   `yawRad = camera_angle.vy·(2π/4096) + π` aligns the DX11 yaw-derived forward
+   while keeping the right-handed `front = -z` convention the projection expects.
+3. **`MatWorldFromGte` stored the world translation in the wrong slot** — the
+   vertex shader is row-vector (`mul(pos, world)`), so the translation must be in
+   the **last row** (`world[3][0..2]`), but it was in the last column; the
+   geometry never moved off the model's local origin. The headless harness did
+   not catch this (its world matrices had zero translation, where both
+   conventions agree). Fix: translation now written to the last row.
+
+`Dx11GameFeed_RenderFrame` gained an optional `customView` parameter (NULL = the
+yaw-based `Dx11Stereo_ViewMatrix`, prior behaviour; the game passes NULL, and
+the game's own `inv_camera_matrix` is available for a pitch/roll-correct view).
+Full detail: `T5.2-ab-verify-in-game.md`.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

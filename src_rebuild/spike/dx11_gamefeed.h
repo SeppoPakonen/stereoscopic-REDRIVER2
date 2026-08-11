@@ -64,7 +64,8 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              int swap, Dx11CompositeMode mode,
                              void *texUser, Dx11ModelTexResolve texResolve,
                              const unsigned short *tpages,
-                             const char *bmpOut);
+                             const char *bmpOut,
+                             const float (*customView)[4]);
 
 #ifdef __cplusplus
 }

@@ -78,6 +78,10 @@ extern _pct& plotContext;
 
 extern void* model_tile_ptrs[MAX_DRAWN_TILES];
 
+// T5.2 feed: world-space position (nearCell-resolved) of each tile in
+// model_tile_ptrs, filled by DrawMapPSX and consumed by DrawTILES's dx11 feed.
+extern VECTOR model_tile_pos[MAX_DRAWN_TILES];
+
 extern int units_across_halved;
 extern int units_down_halved;
 extern int pvs_square;

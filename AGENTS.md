@@ -210,8 +210,17 @@ slice (T5.1) are **complete**:
   renders the feed (MONO). The terrain feed now bakes **real tpage/clut textures**
   from VRAM (`Dx11Game_TexResolve` → full-page regions; `Dx11GameFeed_ModelToMesh`
   `tpages` UV-X scaling by format; per-frame `GR_ReadVRAM` → `Dx11Tex_CopyVRAM`
-  staging refresh). Verified by build-link + inspection; a running-game A/B
-  requires a user run.
+  staging refresh). **In-game A/B verified**: running the real game
+  (`-mission 50`, from a full install — the repo's `data/DRIVER2` is only a
+  stub) now renders the terrain feed in the companion DX11 window in parallel
+  with the SDL legacy window; `-renderer psyx` shows the SDL window only. Three
+  in-game-only bugs were fixed: tile positions were packed/not nearCell-resolved
+  (`model_tile_pos[]` added), the camera view direction was inverted vs the
+  game's GTE (`yawRad += π`), and `MatWorldFromGte` stored the world translation
+  in the wrong matrix slot for the row-vector shader (last row, not last column;
+  the headless harness missed this because its world matrices had zero
+  translation). `Dx11GameFeed_RenderFrame` gained an optional `customView`
+  parameter. See `plan/DX11-renderer/T5.2-ab-verify-in-game.md`.
 
 Build: `premake5 gmake2 --os=windows` + `mingw32-make <proj>
 config=release_dev_x86` (32-bit mingw32; the game's known-good PsyCross path).
@@ -223,8 +232,9 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 1. Finish the plot-function feed rewiring: cars (DrawCar chain), sprites/sky/
    effects. The terrain/tile feed (T5.2 core) + the DrawGame dx11 consumer (A/B
-   companion window) + real feed texture baking are done; pitch/roll camera and
-   a running-game A/B are the immediate follow-ups.
+   companion window) + real feed texture baking + the in-game A/B verification
+   (terrain feed renders in the companion window) are done; pitch/roll camera
+   is the immediate follow-up.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
@@ -236,5 +246,7 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 **Last Updated**: 2026-08-11
 **Phase**: 4 (Integration & cleanup — renderer rewrite)
 **Status**: Phase 4 done (T4.1–T4.6) + T5.1 renderer integration + T5.2
-terrain/tile feed + DrawGame dx11 consumer (A/B); launcher + stereo GUI working,
-DX11 + modern GL backends selectable, mono/per-eye/stereo-composite A/B-verified
+terrain/tile feed + DrawGame dx11 consumer (A/B) + in-game A/B verified
+(terrain feed renders in the companion DX11 window); launcher + stereo GUI
+working, DX11 + modern GL backends selectable, mono/per-eye/stereo-composite
+A/B-verified

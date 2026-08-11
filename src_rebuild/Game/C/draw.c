@@ -90,6 +90,7 @@ SVECTOR night_colours[4] =
 
 void* model_object_ptrs[MAX_DRAWN_BUILDINGS];
 void* model_tile_ptrs[MAX_DRAWN_TILES];
+VECTOR model_tile_pos[MAX_DRAWN_TILES];
 void* anim_obj_buffer[MAX_DRAWN_ANIMATING];
 void* spriteList[MAX_DRAWN_SPRITES];
 
@@ -1523,8 +1524,14 @@ void DrawMapPSX(int* comp_val)
 									}
 								}
 
-								if (drawData.tiles_found < MAX_DRAWN_TILES)
+								if (drawData.tiles_found < MAX_DRAWN_TILES) {
+									// T5.2 feed: store the nearCell-resolved world position
+									// (ppco->pos is packed relative to the cell origin).
+									model_tile_pos[drawData.tiles_found].vx = ci.nearCell.x + (short)(ppco->pos.vx - ci.nearCell.x);
+									model_tile_pos[drawData.tiles_found].vy = (short)ppco->pos.vy >> 1;
+									model_tile_pos[drawData.tiles_found].vz = ci.nearCell.z + (short)(ppco->pos.vz - ci.nearCell.z);
 									model_tile_ptrs[drawData.tiles_found++] = ppco;
+								}
 							}
 							else
 							{

@@ -1744,9 +1744,13 @@ static void Dx11Game_RenderFrame(void)
 	                 DX11TEX_VRAM_W, DX11TEX_VRAM_H, 0, 0);
 
 	// Camera: game world pos + yaw (game angle 4096 = 2*pi). The DX11 camera is
-	// yaw-only (Dx11Stereo_ViewMatrix); pitch/roll are ignored for now.
+	// yaw-only (Dx11Stereo_ViewMatrix); pitch/roll are ignored for now. The +pi
+	// turns the yaw-derived forward to match the game's GTE view (RotMatrixY(-yaw),
+	// forward = +view z = (-sin,0,+cos)); the DX11 forward is (sin,0,-cos), so a
+	// half-turn aligns the two while keeping the DX11 right-handed (front = -z)
+	// convention the projection expects.
 	float camPos[3] = { (float)camera_position.vx, (float)camera_position.vy, (float)camera_position.vz };
-	float yawRad = (float)camera_angle.vy * (6.2831853f / 4096.0f);
+	float yawRad = (float)camera_angle.vy * (6.2831853f / 4096.0f) + 3.1415927f;
 
 	// Projection from the game's FrAng (horizontal half-FOV, game angle units).
 	float fovH = (float)FrAng * (6.2831853f / 4096.0f);
@@ -1761,7 +1765,8 @@ static void Dx11Game_RenderFrame(void)
 	                         camPos, yawRad, 0.0f /*sep*/, 0 /*swap*/,
 	                         DX11C_MODE_MONO, NULL /*texUser*/,
 	                         Dx11Game_TexResolve, texture_pages /*tpages*/,
-	                         NULL /*bmpOut*/);
+	                         NULL /*bmpOut*/,
+	                         NULL /*customView*/);
 }
 #endif // _WIN32
 

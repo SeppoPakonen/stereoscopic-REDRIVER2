@@ -123,9 +123,13 @@ int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flat
 // ---------------------------------------------------------------------------
 static void MatWorldFromGte(const MATRIX *m, float world[4][4]) {
     memset(world, 0, 16 * sizeof(float));
-    world[0][0] = m->m[0][0] / 4096.0f; world[0][1] = m->m[0][1] / 4096.0f; world[0][2] = m->m[0][2] / 4096.0f; world[0][3] = (float)m->t[0];
-    world[1][0] = m->m[1][0] / 4096.0f; world[1][1] = m->m[1][1] / 4096.0f; world[1][2] = m->m[1][2] / 4096.0f; world[1][3] = (float)m->t[1];
-    world[2][0] = m->m[2][0] / 4096.0f; world[2][1] = m->m[2][1] / 4096.0f; world[2][2] = m->m[2][2] / 4096.0f; world[2][3] = (float)m->t[2];
+    // Row-vector convention (mul(pos, world) in the shader): rotation in the
+    // top-left 3x3, translation in the LAST ROW (world[3][0..2]). The GTE MATRIX
+    // is fixed-point (4096 = 1.0).
+    world[0][0] = m->m[0][0] / 4096.0f; world[0][1] = m->m[0][1] / 4096.0f; world[0][2] = m->m[0][2] / 4096.0f;
+    world[1][0] = m->m[1][0] / 4096.0f; world[1][1] = m->m[1][1] / 4096.0f; world[1][2] = m->m[1][2] / 4096.0f;
+    world[2][0] = m->m[2][0] / 4096.0f; world[2][1] = m->m[2][1] / 4096.0f; world[2][2] = m->m[2][2] / 4096.0f;
+    world[3][0] = (float)m->t[0]; world[3][1] = (float)m->t[1]; world[3][2] = (float)m->t[2];
     world[3][3] = 1.0f;
 }
 
@@ -154,7 +158,8 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              int swap, Dx11CompositeMode mode,
                              void *texUser, Dx11ModelTexResolve texResolve,
                              const unsigned short *tpages,
-                             const char *bmpOut) {
+                             const char *bmpOut,
+                             const float (*customView)[4]) {
     ID3D11DeviceContext *ctx = Dx11Renderer_GetContext(ren);
     int iw = Dx11Renderer_GetInternalWidth(ren), ih = Dx11Renderer_GetInternalHeight(ren);
     int w = Dx11Renderer_GetWindowWidth(ren), h = Dx11Renderer_GetWindowHeight(ren);
@@ -170,7 +175,11 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                                    D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
         float view[4][4], vp[4][4];
-        Dx11Stereo_ViewMatrix(camPos, yawRad, eyes[e], sep, swap, view);
+        if (customView) {
+            memcpy(view, customView, sizeof(view));
+        } else {
+            Dx11Stereo_ViewMatrix(camPos, yawRad, eyes[e], sep, swap, view);
+        }
         MatMul(view, proj, vp);
 
         Dx11DrawCmds_BeginFrame(cmds);
