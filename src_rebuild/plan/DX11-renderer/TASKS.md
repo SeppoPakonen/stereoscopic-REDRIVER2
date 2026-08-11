@@ -54,6 +54,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 - [x] **T4.2** Keep legacy `psyx` path selectable — [T4.2](T4.2-keep-psyx-selectable.md)
 - [x] **T4.3** Non-stereo regression — [T4.3](T4.3-non-stereo-regression.md)
 - [x] **T4.4** (stretch) Modern GL backend mirroring DX11 — [T4.4](T4.4-modern-gl-backend.md)
+- [ ] **T4.5** Wire `-renderer gl` into the registry & build — [T4.5](T4.5-renderer-gl-registry-wiring.md)
 
 ## Out of scope (for now)
 
