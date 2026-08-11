@@ -807,6 +807,62 @@ project "dx11_splitscreen"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 higher-internal-resolution verification (T3.3): renders a symmetric
+-- marker-pair probe scene into the offscreen RT at several internal resolutions
+-- (320x240 / 640x480 / 1280x720) and proves the projection stays correct (the
+-- perspective centre stays centred — unlike the PSX 320x240 lock) and the
+-- captured dims match the configured resolution. Driven by dx11_ires_test.cpp
+-- on the full stack; verified headless (ires / projection / symmetry probes).
+-- ---------------------------------------------------------------------------
+project "dx11_ires"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_resources.h",
+        "spike/dx11_resources.c",
+        "spike/dx11_textures.h",
+        "spike/dx11_textures.c",
+        "spike/dx11_shaders.h",
+        "spike/dx11_shaders.c",
+        "spike/dx11_drawcmdexec.h",
+        "spike/dx11_drawcmdexec.c",
+        "spike/dx11_ires_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 stereo-scene / right-eye verification (T2.4): renders a representative
 -- scene (map/terrain quad + car quad) into BOTH per-eye RTs through the stereo
 -- path (Dx11Stereo_ViewMatrix per-eye view + T2.1 independent eye RTs) and

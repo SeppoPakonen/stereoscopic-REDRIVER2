@@ -220,6 +220,12 @@ renderer in T1.5.
   blue, P2-R yellow) and verifies `Dx11Composite_SplitComposite` maps them into
   the four backbuffer quadrants for every split×layout (H_SBS / H_TB / V_SBS /
   V_TB) and that swap flips the eye assignment. Probes: all PASS.
+- **`dx11_ires_test.cpp`** (T3.3) — **higher-internal-resolution harness**: renders
+  a symmetric marker-pair probe scene into the offscreen RT at internal
+  resolutions 320x240 / 640x480 / 1280x720 and proves the projection stays
+  correct at every res (the perspective centre stays centred — unlike the PSX
+  320x240 lock, which broke the projection at non-native res) and the captured
+  dims match the configured res. Probes: `IRES`/`PROJ`/`SYMM` — all PASS.
 - **`dx11_stereoscene_test.cpp`** (T2.4) — **right-eye-map verification harness**:
   renders a representative scene (a large map/terrain quad + a car quad) into
   BOTH per-eye RTs through the stereo path (`Dx11Stereo_ViewMatrix` per-eye view
