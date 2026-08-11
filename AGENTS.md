@@ -150,23 +150,59 @@ Each contains:
 - **Game Executable**: `src_rebuild/bin/Release/REDRIVER2.exe`
   - Built using Visual Studio (see src_rebuild/build/REDRIVER2.vcxproj)
   - Contains Phase 1, 2, 3 stereo rendering implementation
-  
+
 - **Stereo Implementation**: `src_rebuild/Game/render/stereo.*`
   - Core stereo camera system
   - 8 stereo output modes
   - Shader-based composition
   - Convergence/separation controls
 
+## Renderer Rewrite — Phase 4 (DX11 + modern GL)
+
+The renderer rewrite (plan docs in `src_rebuild/plan/DX11-renderer/`) replaces the
+PSX OT/primitive renderer with a **standard DX11 renderer stack** fed by a
+world-space **draw-command list**, with the legacy PsyX GL path and a modern GL
+backend kept selectable. Phase 4 (T4.1–T4.5) is **complete**:
+
+- **Multi-renderer selection**: `-renderer dx11` (default) / `-renderer psyx`
+  (legacy) / `-renderer gl` (modern). All three resolve in `renderer.h`
+  (`Renderer_FromName`/`IsDX11`/`IsPsyX`/`IsGL`) and genuinely dispatch in `DrawGame`
+  (`main.c`), probing `Dx11Renderer_Available()` / `GlRenderer_Available()`.
+- **Standalone DX11 modules** in `src_rebuild/spike/` (the `dx11_renderer`,
+  `dx11_resources`, `dx11_textures`, `dx11_shaders`, `dx11_drawcmdexec`,
+  `dx11_modeladapter`, `dx11_input`, `dx11_audio`, `dx11_stereo`,
+  `dx11_composite` modules) — each verified headless via its own harness + BMP
+  pixel probes.
+- **Backend A/B / separation**: `dx11_backendab_{dx11,psyx}` prove the DX11 binary
+  contains no psyx code and vice versa (objdump DLL imports), and reproduce the
+  identical scene from a common stored world-state (`dx11_backendab_state.h`
+  store/load A/B).
+- **Non-stereo regression**: `dx11_nonstereo_test.cpp` proves the DX11 **mono path**
+  (render straight to the backbuffer, no per-eye/composite) is correct, full-frame,
+  and stereo-state-independent; parity with the psyx reference.
+- **Modern GL backend**: `gl_renderer.{h,c}` (SDL + GL 3.3 core + glad,
+  VAO/VBO/IBO + GLSL shaders + ortho projection — not the PSX primitive model) +
+  `gl_nonstereo_test.cpp` A/B vs DX11 (identical output). Wired into the game
+  build + registry in T4.5.
+
+Build: `premake5 gmake2 --os=windows` + `mingw32-make <proj>
+config=release_dev_x86` (32-bit mingw32; the game's known-good PsyCross path).
+Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
+`libwinpthread-1.dll`, `SDL2.dll`, `libopenal-1.dll` (psyx/GL); `d3d11.dll`/
+`D3DCOMPILER_47.dll` (DX11).
+
 ## Next Steps for Future Development
 
-1. Implement advanced quality tuning (Task #13 continuation)
-2. Performance optimization for stereo rendering
-3. Extended mode support (polarized, checkerboard)
-4. Comprehensive regression testing
-5. User documentation
+1. Per-eye stereo / composite parity for the modern GL backend (`-renderer gl`).
+2. Full in-game `DrawGame` → draw-command → DX11/GL → per-eye → composite rewiring
+   (the core integration; the standalone A/B slices are done).
+3. Advanced quality tuning / performance optimization for stereo rendering.
+4. Comprehensive regression testing.
+5. User documentation.
 
 ---
 
-**Last Updated**: 2026-07-31
-**Phase**: 3 (Advanced Features & Optimization)
-**Status**: Launcher GUI complete, executable building working
+**Last Updated**: 2026-08-11
+**Phase**: 4 (Integration & cleanup — renderer rewrite)
+**Status**: Phase 4 complete (T4.1–T4.5); launcher + stereo GUI working, DX11 +
+modern GL backends selectable and A/B-verified
