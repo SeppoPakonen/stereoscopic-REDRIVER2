@@ -758,6 +758,65 @@ project "dx11_stereo"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 stereo-scene / right-eye verification (T2.4): renders a representative
+-- scene (map/terrain quad + car quad) into BOTH per-eye RTs through the stereo
+-- path (Dx11Stereo_ViewMatrix per-eye view + T2.1 independent eye RTs) and
+-- proves the legacy "right-eye map disappears" bug is structurally absent
+-- (right-eye RT has the full map, equal draw counts, symmetric output). Driven
+-- by dx11_stereoscene_test.cpp on the full stack + dx11_stereo; verified
+-- headless (map/car/drawcount/symmetric probes).
+-- ---------------------------------------------------------------------------
+project "dx11_stereoscene"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_resources.h",
+        "spike/dx11_resources.c",
+        "spike/dx11_textures.h",
+        "spike/dx11_textures.c",
+        "spike/dx11_shaders.h",
+        "spike/dx11_shaders.c",
+        "spike/dx11_drawcmdexec.h",
+        "spike/dx11_drawcmdexec.c",
+        "spike/dx11_stereo.h",
+        "spike/dx11_stereo.c",
+        "spike/dx11_stereoscene_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 shaders + render state (T1.4): universal VS + flat/gouraud textured PS,
 -- the PSX blend/depth-stencil/rasterizer states, and a per-draw flat-color CB.
 -- Driven by dx11_shaders_test.cpp on top of dx11_renderer + dx11_textures;

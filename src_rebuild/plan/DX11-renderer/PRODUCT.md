@@ -189,10 +189,14 @@ renderer in T1.5.
   `sep*2`, left → `-right·gain`, right → `+right·gain`, swap negates);
   `Dx11Stereo_ViewMatrix` builds the per-eye world→view matrix (eye offset
   folded into the camera position) so the two eyes differ only by the lateral
-  offset; `Dx11Stereo_ApplyConvergence` shears the projection horizontally
-  (the legacy renderer-side `gStereoConvergence`). Harness:
-  `dx11_stereo_test.cpp` (offset/stable/swap/separation/convergence probes, all
-  PASS). Pure math, no extra links.
+  offset — returned as the **transposed view `V^t`** (basis in columns,
+  translation in the last row) so `viewProj = view * proj` composes to
+  `(P*V)^t` under the DX11 pipeline convention (proj stored as `P^t`; fixed
+  during T2.4, which caught the original `V`-form not composing and ~3x parallax);
+  `Dx11Stereo_ApplyConvergence` shears the projection horizontally (the legacy
+  renderer-side `gStereoConvergence`). Harness: `dx11_stereo_test.cpp`
+  (offset/stable/swap/separation/convergence probes, all PASS). Pure math, no
+  extra links.
 - **`dx11_composite.{h,c}`** (T2.3) — `Dx11Composite`: game-agnostic **SBS/TB
   composite pass** that samples the two per-eye offscreen SRVs (T2.1) into the
   backbuffer halves, replacing the legacy `StereoCompositor_Composite` GL blit.
@@ -205,6 +209,15 @@ renderer in T1.5.
   per-pixel pass is the foundation for Phase 3's color modes. Harness:
   `dx11_composite_test.cpp` (sbs/tb/swap/mono probes, all PASS at 800x600 and
   1280x720). Links `d3d11`+`dxgi`+`d3dcompiler`+`user32`+`gdi32`.
+- **`dx11_stereoscene_test.cpp`** (T2.4) — **right-eye-map verification harness**:
+  renders a representative scene (a large map/terrain quad + a car quad) into
+  BOTH per-eye RTs through the stereo path (`Dx11Stereo_ViewMatrix` per-eye view
+  + T2.1 independent eye RTs) and proves the legacy "right-eye map disappears"
+  bug is structurally absent: the right-eye RT has the full map (pixel green,
+  not background), both eyes submit equal draw counts, and both carry the same
+  objects (symmetric apart from the lateral offset). Caught and fixed the
+  `ViewMatrix` `V`-vs-`V^t` convention bug (see `dx11_stereo`). Probes:
+  `MAP_L`/`MAP_R`, `CAR_L`/`CAR_R`, `DUAL_DRAWCOUNT`, `SYMMETRIC` — all PASS.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

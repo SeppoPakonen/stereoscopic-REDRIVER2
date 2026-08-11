@@ -43,16 +43,18 @@ void Dx11Stereo_ViewMatrix(const float camPos[3], float yawRad, Dx11StereoEye ey
     float up[3]    = { 0.0f, 1.0f, 0.0f };
     float negFwd[3]= { -sinf(yawRad), 0.0f, cosf(yawRad) };
 
-    // Row 0 = right, translation = -dot(right, eyePos).
-    mat[0][0] = right[0]; mat[0][1] = right[1]; mat[0][2] = right[2];
-    mat[0][3] = -(right[0]*eyePos[0] + right[1]*eyePos[1] + right[2]*eyePos[2]);
-    // Row 1 = up.
-    mat[1][0] = up[0]; mat[1][1] = up[1]; mat[1][2] = up[2];
-    mat[1][3] = -(up[0]*eyePos[0] + up[1]*eyePos[1] + up[2]*eyePos[2]);
-    // Row 2 = -forward.
-    mat[2][0] = negFwd[0]; mat[2][1] = negFwd[1]; mat[2][2] = negFwd[2];
-    mat[2][3] = -(negFwd[0]*eyePos[0] + negFwd[1]*eyePos[1] + negFwd[2]*eyePos[2]);
-
+    // Output V^t (transpose of the standard column-vector view matrix V), so
+    // that viewProj = view * proj composes to (P*V)^t under the DX11 pipeline
+    // convention (C++ row-major storage, HLSL mul reads the matrix transposed,
+    // effective = mat*p; proj is stored as P^t). Columns hold the basis:
+    //   col0 = right, col1 = up, col2 = -forward,
+    // and the translation -R*eyePos lives in the last ROW.
+    mat[0][0] = right[0]; mat[0][1] = up[0];    mat[0][2] = negFwd[0];
+    mat[1][0] = right[1]; mat[1][1] = up[1];    mat[1][2] = negFwd[1];
+    mat[2][0] = right[2]; mat[2][1] = up[2];    mat[2][2] = negFwd[2];
+    mat[3][0] = -(right[0]*eyePos[0] + right[1]*eyePos[1] + right[2]*eyePos[2]);
+    mat[3][1] = -(up[0]*eyePos[0] + up[1]*eyePos[1] + up[2]*eyePos[2]);
+    mat[3][2] = -(negFwd[0]*eyePos[0] + negFwd[1]*eyePos[1] + negFwd[2]*eyePos[2]);
     mat[3][3] = 1.0f;
 }
 

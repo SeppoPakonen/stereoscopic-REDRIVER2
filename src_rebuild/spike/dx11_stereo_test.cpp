@@ -73,7 +73,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     if (!okYaw) ++fails;
 
     // ------------------------------------------------------------------
-    // STABLE — left/right view matrices differ only in row-0 translation.
+    // STABLE — left/right view matrices differ only in the last-row
+    // translation (the lateral axis); the 3x3 basis is identical.
     // ------------------------------------------------------------------
     float cam[3] = { 100.0f, 50.0f, -200.0f };
     float mL[4][4], mR[4][4];
@@ -87,16 +88,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     fprintf(resf, "STABLE rotation part identical %s\n", rotSame ? "PASS" : "FAIL");
     if (!rotSame) ++fails;
 
-    // row-0 translation differs by exactly -4*sep (right minus left).
-    float drow0 = mR[0][3] - mL[0][3];
-    int okT0 = Close(drow0, -4.0f, tol);
-    fprintf(resf, "STABLE row0 trans diff=%.3f expect -4.0 %s\n", drow0, okT0 ? "PASS" : "FAIL");
-    if (!okT0) ++fails;
+    // Last-row x-translation differs by exactly -4*sep (right minus left).
+    float drow3 = mR[3][0] - mL[3][0];
+    int okT3 = Close(drow3, -4.0f, tol);
+    fprintf(resf, "STABLE last-row x-trans diff=%.3f expect -4.0 %s\n", drow3, okT3 ? "PASS" : "FAIL");
+    if (!okT3) ++fails;
 
-    // row-1 and row-2 translations identical (offset is purely lateral).
-    int okT12 = Close(mL[1][3], mR[1][3], tol) && Close(mL[2][3], mR[2][3], tol);
-    fprintf(resf, "STABLE row1/row2 trans identical %s\n", okT12 ? "PASS" : "FAIL");
-    if (!okT12) ++fails;
+    // Last-row y/z translations identical (offset is purely lateral).
+    int okTyz = Close(mL[3][1], mR[3][1], tol) && Close(mL[3][2], mR[3][2], tol);
+    fprintf(resf, "STABLE last-row y/z trans identical %s\n", okTyz ? "PASS" : "FAIL");
+    if (!okTyz) ++fails;
 
     // ------------------------------------------------------------------
     // SWAP — flipping the eye swap sign flips the offset.

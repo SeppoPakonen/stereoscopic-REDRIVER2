@@ -37,9 +37,12 @@ void Dx11Stereo_EyeOffset(float yawRad, Dx11StereoEye eye, float separation,
 // ---------------------------------------------------------------------------
 // Builds the world->view matrix for an eye. The camera looks along
 // forward = (sin yaw, 0, -cos yaw), up = +Y, right = (cos yaw, 0, sin yaw);
-// the eye's world position is camPos + EyeOffset. Rows are right / up /
-// -forward with translation -R*eyePos (row-vector convention, result = m*p).
-// `mat` is a 4x4 in row-major storage.
+// the eye's world position is camPos + EyeOffset. Returns V^t (the transpose
+// of the standard column-vector view matrix V): columns hold the right / up /
+// -forward basis and the translation -R*eyePos lives in the last row. This is
+// the storage the DX11 pipeline needs so that viewProj = view * proj composes
+// to (P*V)^t under the row-vector/column-major convention (proj is stored as
+// P^t). `mat` is a 4x4 in row-major storage.
 void Dx11Stereo_ViewMatrix(const float camPos[3], float yawRad, Dx11StereoEye eye,
                            float separation, int swap, float mat[4][4]);
 
