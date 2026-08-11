@@ -664,6 +664,63 @@ project "dx11_eyetargets"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 SBS/TB composite (T2.3): fullscreen-triangle pass that samples the two
+-- per-eye offscreen SRVs (T2.1) into the backbuffer halves (side-by-side /
+-- top-and-bottom), with a swap-eyes option, replacing the legacy GL blit.
+-- Driven by dx11_composite_test.cpp on top of the full stack; verified headless
+-- (sbs / tb / swap / mono probes).
+-- ---------------------------------------------------------------------------
+project "dx11_composite"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_renderer.h",
+        "spike/dx11_renderer.c",
+        "spike/dx11_resources.h",
+        "spike/dx11_resources.c",
+        "spike/dx11_textures.h",
+        "spike/dx11_textures.c",
+        "spike/dx11_shaders.h",
+        "spike/dx11_shaders.c",
+        "spike/dx11_drawcmdexec.h",
+        "spike/dx11_drawcmdexec.c",
+        "spike/dx11_composite.h",
+        "spike/dx11_composite.c",
+        "spike/dx11_composite_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 per-eye projection math (T2.2): game-agnostic stereo camera module
 -- (yaw-derived lateral eye offset, per-eye world->view matrix, convergence
 -- shear). Driven by dx11_stereo_test.cpp; verified headless (offset / stable /
