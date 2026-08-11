@@ -197,18 +197,22 @@ renderer in T1.5.
   renderer-side `gStereoConvergence`). Harness: `dx11_stereo_test.cpp`
   (offset/stable/swap/separation/convergence probes, all PASS). Pure math, no
   extra links.
-- **`dx11_composite.{h,c}`** (T2.3) — `Dx11Composite`: game-agnostic **SBS/TB
-  composite pass** that samples the two per-eye offscreen SRVs (T2.1) into the
-  backbuffer halves, replacing the legacy `StereoCompositor_Composite` GL blit.
-  A fullscreen triangle (no vertex buffer, generated via `SV_VertexID`) + a
-  pixel shader that, per output pixel, picks which eye fills the current half
-  and resamples it with a point sampler (nearest, matching the legacy
-  `GL_NEAREST`). Modes `DX11C_MODE_SBS` (eye0 left / eye1 right),
-  `DX11C_MODE_TB` (eye0 top / eye1 bottom), `DX11C_MODE_MONO` (eye0
-  pass-through); `swap` flips which eye fills the left/top half. The same
-  per-pixel pass is the foundation for Phase 3's color modes. Harness:
-  `dx11_composite_test.cpp` (sbs/tb/swap/mono probes, all PASS at 800x600 and
-  1280x720). Links `d3d11`+`dxgi`+`d3dcompiler`+`user32`+`gdi32`.
+- **`dx11_composite.{h,c}`** (T2.3, **extended T3.1**) — `Dx11Composite`:
+  game-agnostic **stereo composite pass** that samples the two per-eye offscreen
+  SRVs (T2.1) into the backbuffer, replacing the legacy
+  `StereoCompositor_Composite` GL blit. A fullscreen triangle (no vertex buffer,
+  generated via `SV_VertexID`) + a pixel shader driven by a `b0` params CB
+  (`mode`, `swap`) + a point sampler (nearest, matching the legacy `GL_NEAREST`).
+  Modes: `DX11C_MODE_SBS` (eye0 left / eye1 right), `DX11C_MODE_TB` (eye0 top /
+  eye1 bottom), `DX11C_MODE_MONO` (eye0 pass-through), plus the T3.1 color modes
+  ported verbatim from the legacy shader sources — `ANAGLYPH` (red-cyan),
+  `ANAGLYPH_FULLCOLOR` (luminance blend), `INTERLACED` (odd rows = eye0),
+  `POLARIZED` (complementary scanlines), `CHECKERBOARD` (`mod(x+y,2)` interleave);
+  `swap` flips the channel/eye assignment. The per-pixel pass is the foundation
+  for Phase 3's color modes/split-screen. Harness: `dx11_composite_test.cpp`
+  (sbs/tb/swap/mono + anaglyph/interlaced/polarized/checkerboard probes, all
+  PASS at 800x600 and 1280x720). Links `d3d11`+`dxgi`+`d3dcompiler`+`user32`+
+  `gdi32`.
 - **`dx11_stereoscene_test.cpp`** (T2.4) — **right-eye-map verification harness**:
   renders a representative scene (a large map/terrain quad + a car quad) into
   BOTH per-eye RTs through the stereo path (`Dx11Stereo_ViewMatrix` per-eye view

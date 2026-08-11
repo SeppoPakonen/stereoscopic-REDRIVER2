@@ -44,7 +44,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 
 ## Phase 3 — Color modes & split-screen (M3)
 
-- [ ] **T3.1** Shader-based composite color modes — [T3.1](T3.1-shader-composite-color-modes.md)
+- [x] **T3.1** Shader-based composite color modes — [T3.1](T3.1-shader-composite-color-modes.md)
 - [ ] **T3.2** Split-screen — [T3.2](T3.2-split-screen.md)
 - [ ] **T3.3** Higher internal resolution option — [T3.3](T3.3-higher-internal-resolution-option.md)
 

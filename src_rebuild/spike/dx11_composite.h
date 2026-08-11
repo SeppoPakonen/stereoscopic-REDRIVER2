@@ -11,7 +11,11 @@
 //   DX11C_MODE_SBS  — left half = eye0, right half = eye1.
 //   DX11C_MODE_TB   — top half  = eye0, bottom half = eye1.
 //   DX11C_MODE_MONO — pass-through of eye0 across the full screen.
-// swap=1 swaps which eye fills the left/top half.
+//   DX11C_MODE_ANAGLYPH / _FULLCOLOR — red-cyan / luminance-blended anaglyph.
+//   DX11C_MODE_INTERLACED — odd rows = eye0, even rows = eye1.
+//   DX11C_MODE_POLARIZED  — scanline encoding (complementary to INTERLACED).
+//   DX11C_MODE_CHECKERBOARD — pixel interleave (mod(x+y,2)).
+// swap=1 swaps which eye fills the left/top half / channel / row.
 
 #ifndef DX11_COMPOSITE_H
 #define DX11_COMPOSITE_H
@@ -30,6 +34,11 @@ typedef enum {
     DX11C_MODE_SBS = 0,
     DX11C_MODE_TB  = 1,
     DX11C_MODE_MONO = 2,
+    DX11C_MODE_ANAGLYPH = 3,
+    DX11C_MODE_ANAGLYPH_FULLCOLOR = 4,
+    DX11C_MODE_INTERLACED = 5,
+    DX11C_MODE_POLARIZED = 6,
+    DX11C_MODE_CHECKERBOARD = 7,
 } Dx11CompositeMode;
 
 typedef enum {

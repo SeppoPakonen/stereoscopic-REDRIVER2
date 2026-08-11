@@ -40,18 +40,63 @@ Texture2D t1 : register(t1);
 SamplerState samp : register(s0);
 cbuffer Params : register(b0) { float2 modeSwap; };
 struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
+
+float4 SampleEye(float2 uv, float sel) {
+    return sel > 0.5 ? t1.Sample(samp, uv) : t0.Sample(samp, uv);
+}
+
 float4 main(VSOut i) : SV_Target {
-    if (modeSwap.x > 1.5f)                       // MONO: eye0 pass-through
-        return t0.Sample(samp, i.uv);
-    bool first = (modeSwap.x < 0.5f) ? (i.uv.x < 0.5f) : (i.uv.y < 0.5f);
-    if (modeSwap.y > 0.5f) first = !first;       // swap flips left/top eye
+    float m = modeSwap.x;
+    float sw = modeSwap.y;
     float2 uv = i.uv;
-    if (modeSwap.x < 0.5f) {                     // SBS halves
-        if (uv.x < 0.5f) uv.x *= 2.0f; else uv.x = (uv.x - 0.5f) * 2.0f;
-    } else {                                     // TB halves
-        if (uv.y < 0.5f) uv.y *= 2.0f; else uv.y = (uv.y - 0.5f) * 2.0f;
+
+    if (m > 2.5 && m < 3.5) {              // ANAGLYPH simple (red-cyan)
+        float4 L = t0.Sample(samp, uv);
+        float4 R = t1.Sample(samp, uv);
+        if (sw > 0.5) { float4 T = L; L = R; R = T; }
+        return float4(L.r, R.g, R.b, 1.0);
     }
-    return first ? t0.Sample(samp, uv) : t1.Sample(samp, uv);
+    if (m > 3.5 && m < 4.5) {              // ANAGLYPH full-color (luminance)
+        float4 L = t0.Sample(samp, uv);
+        float4 R = t1.Sample(samp, uv);
+        if (sw > 0.5) { float4 T = L; L = R; R = T; }
+        float ll = dot(L.rgb, float3(0.3, 0.59, 0.11));
+        float rl = dot(R.rgb, float3(0.3, 0.59, 0.11));
+        float3 res = float3(L.r * 0.8, R.g * 0.9, R.b * 0.9);
+        res += float3(rl * 0.1, ll * 0.1, ll * 0.1);
+        return float4(res, 1.0);
+    }
+    if (m > 4.5 && m < 5.5) {              // INTERLACED: odd rows = eye0
+        float scan = fmod(i.pos.y, 2.0);
+        float sel = (scan > 0.5) ? 0.0 : 1.0;
+        if (sw > 0.5) sel = 1.0 - sel;
+        return SampleEye(uv, sel);
+    }
+    if (m > 5.5 && m < 6.5) {              // POLARIZED: odd rows = eye1
+        float scan = fmod(i.pos.y, 2.0);
+        float sel = (scan > 0.5) ? 1.0 : 0.0;
+        if (sw > 0.5) sel = 1.0 - sel;
+        return SampleEye(uv, sel);
+    }
+    if (m > 6.5 && m < 7.5) {              // CHECKERBOARD: pixel interleave
+        float chk = fmod(i.pos.x + i.pos.y, 2.0);
+        float sel = (chk > 0.5) ? 1.0 : 0.0;
+        if (sw > 0.5) sel = 1.0 - sel;
+        return SampleEye(uv, sel);
+    }
+    if (m > 1.5 && m < 2.5)                // MONO: eye0 pass-through
+        return t0.Sample(samp, i.uv);
+
+    // SBS / TB halves.
+    bool first = (m < 0.5) ? (uv.x < 0.5) : (uv.y < 0.5);
+    if (sw > 0.5) first = !first;          // swap flips left/top eye
+    float sel = first ? 0.0 : 1.0;
+    if (m < 0.5) {                         // SBS
+        if (uv.x < 0.5) uv.x *= 2.0f; else uv.x = (uv.x - 0.5f) * 2.0f;
+    } else {                               // TB
+        if (uv.y < 0.5) uv.y *= 2.0f; else uv.y = (uv.y - 0.5f) * 2.0f;
+    }
+    return SampleEye(uv, sel);
 }
 )";
 

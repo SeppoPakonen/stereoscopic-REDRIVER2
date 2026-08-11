@@ -199,10 +199,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
     Compose(DX11C_MODE_SBS, 1, "composite_sbs_swap.bmp");
     Compose(DX11C_MODE_TB, 1,  "composite_tb_swap.bmp");
     Compose(DX11C_MODE_MONO, 0, "composite_mono.bmp");
+    Compose(DX11C_MODE_ANAGLYPH, 0, "composite_anaglyph.bmp");
+    Compose(DX11C_MODE_ANAGLYPH_FULLCOLOR, 0, "composite_anaglyph_fc.bmp");
+    Compose(DX11C_MODE_INTERLACED, 0, "composite_interlaced.bmp");
+    Compose(DX11C_MODE_POLARIZED, 0, "composite_polarized.bmp");
+    Compose(DX11C_MODE_CHECKERBOARD, 0, "composite_checker.bmp");
+    Compose(DX11C_MODE_ANAGLYPH, 1, "composite_anaglyph_swap.bmp");
 
     int r = 0, g = 0, b = 0;
     auto IsRed = [](int r, int g, int b) { return r > 180 && g < 40 && b < 40; };
     auto IsBlue = [](int r, int g, int b) { return b > 180 && r < 40 && g < 40; };
+    auto IsMagenta = [](int r, int g, int b) { return r > 180 && b > 180 && g < 40; };
+    auto IsPink = [](int r, int g, int b) { return r > 150 && b > 150 && g < 60; };
 
     // SBS (swap=0): left half = red (eye0), right half = blue (eye1).
     if (ProbeBMP("composite_sbs.bmp", W / 4, H / 2, &r, &g, &b) == 0) {
@@ -258,6 +266,52 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
         fprintf(resf, "MONO full(%d,%d)=(%d,%d,%d) red (eye0 pass-through) %s\n", W / 2, H / 2, r, g, b, ok ? "PASS" : "FAIL");
         if (!ok) ++fails;
     } else { ++fails; fprintf(resf, "MONO probe unavailable\n"); }
+
+    // ANAGLYPH simple: (L.r, R.g, R.b) = red/blue -> magenta.
+    if (ProbeBMP("composite_anaglyph.bmp", W / 2, H / 2, &r, &g, &b) == 0) {
+        int ok = IsMagenta(r, g, b);
+        fprintf(resf, "ANA_S center(%d,%d)=(%d,%d,%d) magenta %s\n", W / 2, H / 2, r, g, b, ok ? "PASS" : "FAIL");
+        if (!ok) ++fails;
+    } else { ++fails; fprintf(resf, "ANA_S probe unavailable\n"); }
+
+    // ANAGLYPH full-color: luminance-blended pink-purple.
+    if (ProbeBMP("composite_anaglyph_fc.bmp", W / 2, H / 2, &r, &g, &b) == 0) {
+        int ok = IsPink(r, g, b);
+        fprintf(resf, "ANA_FC center(%d,%d)=(%d,%d,%d) pink-purple %s\n", W / 2, H / 2, r, g, b, ok ? "PASS" : "FAIL");
+        if (!ok) ++fails;
+    } else { ++fails; fprintf(resf, "ANA_FC probe unavailable\n"); }
+
+    // Alternating modes: two adjacent samples must be red and blue (one each).
+    int cx = W / 2, cyy = H / 2;
+    auto Alternates = [&](const char *bmp, int x1, int y1, int x2, int y2) {
+        int r1 = 0, g1 = 0, b1 = 0, r2 = 0, g2 = 0, b2 = 0;
+        if (ProbeBMP(bmp, x1, y1, &r1, &g1, &b1) || ProbeBMP(bmp, x2, y2, &r2, &g2, &b2)) return false;
+        return (IsRed(r1, g1, b1) && IsBlue(r2, g2, b2)) || (IsBlue(r1, g1, b1) && IsRed(r2, g2, b2));
+    };
+
+    // INTERLACED: adjacent rows alternate red/blue.
+    int okInt = Alternates("composite_interlaced.bmp", cx, cyy, cx, cyy + 1);
+    fprintf(resf, "INT rows(%d,%d)/(%d,%d) alternate red/blue %s\n", cx, cyy, cx, cyy + 1, okInt ? "PASS" : "FAIL");
+    if (!okInt) ++fails;
+
+    // POLARIZED: complementary scanline encoding, still alternating rows.
+    int okPol = Alternates("composite_polarized.bmp", cx, cyy, cx, cyy + 1);
+    fprintf(resf, "POL rows(%d,%d)/(%d,%d) alternate red/blue %s\n", cx, cyy, cx, cyy + 1, okPol ? "PASS" : "FAIL");
+    if (!okPol) ++fails;
+
+    // CHECKERBOARD: adjacent pixels alternate red/blue.
+    int okChk = Alternates("composite_checker.bmp", cx, cyy, cx + 1, cyy);
+    fprintf(resf, "CHK pixels(%d,%d)/(%d,%d) alternate red/blue %s\n", cx, cyy, cx + 1, cyy, okChk ? "PASS" : "FAIL");
+    if (!okChk) ++fails;
+
+    // SWAP anaglyph: with L<->R swapped, (R.r, L.g, L.b) = (0,0,0) black — the
+    // channel assignment flips (here eye0 is pure-red, eye1 pure-blue, so the
+    // swapped anaglyph takes red's g/b which are 0).
+    if (ProbeBMP("composite_anaglyph_swap.bmp", W / 2, H / 2, &r, &g, &b) == 0) {
+        int ok = (r < 40 && g < 40 && b < 40);
+        fprintf(resf, "SWAP anaglyph center(%d,%d)=(%d,%d,%d) black (channels flipped) %s\n", W / 2, H / 2, r, g, b, ok ? "PASS" : "FAIL");
+        if (!ok) ++fails;
+    } else { ++fails; fprintf(resf, "SWAP anaglyph probe unavailable\n"); }
 
     fprintf(resf, "TOTAL_FAILS=%d COMPOSITE=%s\n", fails, fails == 0 ? "PASS" : "FAIL");
     fclose(resf);
