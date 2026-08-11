@@ -165,6 +165,15 @@ renderer in T1.5.
   start=RETURN, dpad=arrows). SDL2 input stays for the GL backends. Links
   `dinput8` + `dxguid` + `ole32`. Harness: `dx11_input_test.cpp` (init/poll/map
   probes, all PASS; the attached gamepad was enumerated).
+- **`dx11_audio.{h,c}`** (T1.8) — `Dx11Audio`: the DX11 backend's native audio
+  layer — game-agnostic XAudio2 (`CoInitializeEx` + `XAudio2Create` +
+  `CreateMasteringVoice`, stereo 44100), a source voice per sound with a PCM
+  `WAVEFORMATEX` format, raw 16-bit PCM submission (`SubmitSourceBuffer`,
+  loopable), `Play`/`Stop`, `SetVolume` (0..1) and `SetPan` (−1..+1 via the
+  2-channel output matrix). A missing audio output device is tolerated
+  (`HasOutput()`). OpenAL (`PsyX_SPUAL.cpp`) stays for the GL backends. Links
+  `xaudio2_8` + `ole32`. Harness: `dx11_audio_test.cpp` (engine/voice/play/
+  volpan probes, all PASS — 0.5 s sine buffer plays and drains).
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

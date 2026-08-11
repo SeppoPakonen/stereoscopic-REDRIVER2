@@ -33,7 +33,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 - [x] **T1.5** Draw-command execution (culling, sort, batch) — [T1.5](T1.5-draw-command-execution.md)
 - [x] **T1.6** Model → arena adapter + headless harness — [T1.6](T1.6-render-map-and-match-output.md)
 - [x] **T1.7** DX11 input: DirectInput8 module + harness — [T1.7](T1.7-dx11-platform-input-directinput.md)
-- [ ] **T1.8** DX11 audio (XAudio2) — [T1.8](T1.8-dx11-audio-xaudio2.md)
+- [x] **T1.8** DX11 audio: XAudio2 module + harness — [T1.8](T1.8-dx11-audio-xaudio2.md)
 
 ## Phase 2 — Stereo natively (M2)
 

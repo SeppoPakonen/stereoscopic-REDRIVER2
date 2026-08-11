@@ -564,6 +564,50 @@ project "dx11_input"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 XAudio2 audio backend (T1.8): XAudio2Create engine + mastering voice,
+-- per-buffer source voices with a PCM format, raw 16-bit PCM submission
+-- (loopable), play/stop, volume + 2-channel pan. Driven by dx11_audio_test.cpp;
+-- verified headless (engine/voice/play/volpan probes). Links xaudio2_8
+-- (XAudio2Create) + ole32 (CoInitializeEx).
+-- ---------------------------------------------------------------------------
+project "dx11_audio"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_audio.h",
+        "spike/dx11_audio.c",
+        "spike/dx11_audio_test.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "xaudio2_8",
+            "ole32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 shaders + render state (T1.4): universal VS + flat/gouraud textured PS,
 -- the PSX blend/depth-stencil/rasterizer states, and a per-draw flat-color CB.
 -- Driven by dx11_shaders_test.cpp on top of dx11_renderer + dx11_textures;
