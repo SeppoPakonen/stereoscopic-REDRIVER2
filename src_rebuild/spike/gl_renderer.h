@@ -41,6 +41,12 @@ GlRenderer *GlRenderer_Create(const GlRendererConfig *cfg);
 
 void GlRenderer_Destroy(GlRenderer *r);
 
+// Returns nonzero if a modern OpenGL 3.3 core context can be created and glad
+// loaded on this machine (a lightweight SDL + GL context create/destroy probe,
+// released immediately). Used by the game to decide whether the GL backend is
+// usable. Never renders.
+int GlRenderer_Available(void);
+
 // Renders `numQuads` screen-space quads through the modern GL path (interleaved
 // pos+color VBO, indexed EBO, one glDrawElements) directly to the default
 // framebuffer, then reads the framebuffer back (glReadPixels, before any swap)

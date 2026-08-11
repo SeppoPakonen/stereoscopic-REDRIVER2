@@ -41,6 +41,7 @@
 #include "../render/renderer.h"
 #if defined(_WIN32)
 #include "dx11_renderer.h"
+#include "gl_renderer.h"
 #endif
 #include "PsyX/PsyX_render.h"
 #include "overlay.h"
@@ -1658,6 +1659,13 @@ void DrawGame(void)
 #else
 		StereoLog_Write("DrawGame: backend=dx11 (not available on this platform)");
 #endif
+	} else if (Renderer_IsGL()) {
+#if defined(_WIN32)
+		StereoLog_Write("DrawGame: backend=gl gl_available=%d",
+		                GlRenderer_Available());
+#else
+		StereoLog_Write("DrawGame: backend=gl (not available on this platform)");
+#endif
 	} else {
 		StereoLog_Write("DrawGame: backend=psyx (legacy)");
 	}
@@ -1896,7 +1904,7 @@ void PrintCommandLineArguments()
 		"  -playercar <number>, -player2car <number> : set player wanted car\n"
 		"  -chase <number> : using specified chase number for mission\n"
 		"  -mission <number> : starts specified mission\n"
-		"  -renderer <name> : rendering backend (dx11 default, psyx legacy)\n"
+		"  -renderer <name> : rendering backend (dx11 default, psyx legacy, gl modern)\n"
 #endif // DEBUG_OPTIONS
 		"  -replay <filename.d2rp> : starts replay from file\n"
 #ifdef CUTSCENE_RECORDER

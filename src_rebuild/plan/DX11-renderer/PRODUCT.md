@@ -9,10 +9,15 @@ and the **draw-command list** contract that the DX11 backend consumes.
 - `-renderer dx11` — **default**, standard DX11 stack, consumes the draw-command
   list. No OT/primitive stream.
 - `-renderer psyx` — legacy PsyX/PsyCross GL (OT/primitive path), kept selectable.
-- (planned) `-renderer gl` — modern OpenGL mirroring the DX11 architecture.
+- `-renderer gl` — modern OpenGL mirroring the DX11 architecture (registry wired
+  in T4.5; the mono slice renders the base scene, stereo/composite parity is a
+  follow-up).
 
 A startup-time selector (in `main.c`, alongside the existing `-stereo`/`-mission`
-flags) picks the backend; the game's render path branches on it.
+flags) picks the backend; the game's render path branches on it. All three
+(`dx11`/`psyx`/`gl`) resolve via `Renderer_FromName` and dispatch in `DrawGame`
+(T4.5): the dx11 branch probes `Dx11Renderer_Available()`, the gl branch probes
+`GlRenderer_Available()`, and psyx runs the legacy path.
 
 ## Draw-command list contract (DX11 feed)
 
@@ -298,10 +303,11 @@ verified as a correct, full-frame, stereo-state-independent render.
   stereo work (T2.1–T3.3) lives entirely in the per-eye/composite path and never
   leaks into the mono path.
 
-**Modern GL backend — mono slice verified (T4.4):** a **modern OpenGL backend**
-(`-renderer gl` long-term) that mirrors the DX11 architecture — a standard
-renderer stack, NOT the PSX primitive/OT model. (The legacy `-renderer psyx` is
-the PSX-primitive GL path; the T4.4 GL path is the modern GL mirror of the DX11
+**Modern GL backend — mono slice verified (T4.4, wired T4.5):** a **modern
+OpenGL backend** (`-renderer gl`, wired into the registry + `DrawGame` dispatch
+in T4.5) that mirrors the DX11 architecture — a standard renderer stack, NOT
+the PSX primitive/OT model. (The legacy `-renderer psyx` is the
+PSX-primitive GL path; the T4.4 GL path is the modern GL mirror of the DX11
 stack.)
 - **`gl_renderer.{h,c}`** (T4.4) — the **modern GL renderer module**: SDL window +
   OpenGL 3.3 core-profile context, glad loader (`gladLoadGL`), a VAO + interleaved
@@ -315,8 +321,8 @@ stack.)
   `GL_QUAD0..2` (each quad's centroid == its stored color), `FULL_FRAME`
   (a standard full-frame projection), and `DX11_PARITY` (3/3 quad centroids match
   the DX11 backend reference BMP — the GL backend reproduces the identical scene).
-  All PASS. Per-eye stereo/composite parity and the `-renderer gl` registry wiring
-  are deferred follow-ups.
+  All PASS. Per-eye stereo/composite parity is the remaining GL follow-up (the
+  `-renderer gl` registry wiring is done in T4.5).
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

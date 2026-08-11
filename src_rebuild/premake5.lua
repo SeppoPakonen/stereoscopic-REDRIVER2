@@ -272,6 +272,7 @@ project "REDRIVER2"
             "spike/dx11_modeladapter.h", "spike/dx11_modeladapter.c",
             "spike/dx11_stereo.h", "spike/dx11_stereo.c",
             "spike/dx11_composite.h", "spike/dx11_composite.c",
+            "spike/gl_renderer.h", "spike/gl_renderer.c",
         }
 
         includedirs { 
@@ -291,7 +292,9 @@ project "REDRIVER2"
     
         filter {"system:Windows", "toolset:gcc"}
             includedirs {
-                (os.getenv("MINGW32_INCLUDE") or "/usr/local/include").."/SDL2",
+                -- premake's `.."/SDL2"` concat mangles the path (space before /SDL2);
+                -- prefer a dedicated env var whose value already holds the dir.
+                os.getenv("MINGW32_SDL2_INCLUDE") or ((os.getenv("MINGW32_INCLUDE") or "/usr/local/include").."/SDL2"),
                 os.getenv("MINGW32_INCLUDE") or "/usr/local/include",
             }
 
@@ -897,12 +900,16 @@ project "dx11_rendererselect"
         "spike/dx11_renderer.h",
         "spike/dx11_renderer.c",
         "spike/dx11_rendererselect_test.cpp",
+        "spike/gl_renderer.h",
+        "spike/gl_renderer.c",
+        "PsyCross/src/render/glad.c",
     }
 
     includedirs {
         "spike",
         "Game",
         "Game/render",
+        "PsyCross/include",
     }
 
     filter { "files:**.c", "files:**.C" }
@@ -915,6 +922,21 @@ project "dx11_rendererselect"
             "d3dcompiler",
             "user32",
             "gdi32",
+        }
+
+    filter {"system:Windows", "toolset:gcc"}
+        includedirs {
+            -- premake's `.."/SDL2"` concat mangles the path (space before /SDL2);
+            -- prefer a dedicated env var whose value already holds the dir.
+            os.getenv("MINGW32_SDL2_INCLUDE") or ((os.getenv("MINGW32_INCLUDE") or "/usr/local/include").."/SDL2"),
+            os.getenv("MINGW32_INCLUDE") or "/usr/local/include",
+        }
+        links {
+            "opengl32",
+            "SDL2",
+        }
+        libdirs {
+            os.getenv("MINGW32_LIB") or "/usr/local/lib",
         }
 
     filter "configurations:Debug"

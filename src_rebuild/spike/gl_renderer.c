@@ -218,6 +218,29 @@ int GlRenderer_GetWidth(const GlRenderer *r) { return r->width; }
 int GlRenderer_GetHeight(const GlRenderer *r) { return r->height; }
 
 // ---------------------------------------------------------------------------
+// Capability probe: can a modern GL 3.3 core context be created + glad loaded?
+// Lightweight create/destroy, no rendering. Returns nonzero if usable.
+// ---------------------------------------------------------------------------
+int GlRenderer_Available(void) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+        return 0;
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_Window *w = SDL_CreateWindow("gl_probe", SDL_WINDOWPOS_CENTERED,
+                                     SDL_WINDOWPOS_CENTERED, 64, 64,
+                                     SDL_WINDOW_OPENGL);
+    if (!w) { SDL_Quit(); return 0; }
+    SDL_GLContext c = SDL_GL_CreateContext(w);
+    if (!c) { SDL_DestroyWindow(w); SDL_Quit(); return 0; }
+    int ok = (gladLoadGL() != 0);
+    SDL_GL_DeleteContext(c);
+    SDL_DestroyWindow(w);
+    SDL_Quit();
+    return ok;
+}
+
+// ---------------------------------------------------------------------------
 // Per-frame render: build the vertex/index arrays, draw once, capture to BMP.
 // ---------------------------------------------------------------------------
 int GlRenderer_RenderFrame(GlRenderer *r, const GlQuad *quads, int numQuads,

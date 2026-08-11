@@ -11,25 +11,28 @@
 // once at startup from the -renderer <name> command-line flag:
 //   -renderer dx11  (DEFAULT) — standard DX11 stack (in development)
 //   -renderer psyx  (legacy)  — PsyX/PsyCross GL (GTE -> OT -> DrawOTag)
-//   -renderer gl    (planned) — modern OpenGL mirroring the DX11 stack
+//   -renderer gl    (modern) — modern OpenGL mirroring the DX11 stack
 //
 // The DX11 path never uses the OT/primitive stream; only the psyx backend does.
 
 typedef enum {
     RENDERER_PSYX = 0,
     RENDERER_DX11 = 1,
+    RENDERER_GL = 2,
     RENDERER_COUNT
 } RendererId;
 
 // Active renderer backend, set once at startup from -renderer <name>.
 extern RendererId gRenderer;
 
-// Resolve a backend name ("psyx" / "dx11") to a RendererId. Unknown names fall
-// back to the default (RENDERER_DX11).
+// Resolve a backend name ("psyx" / "dx11" / "gl") to a RendererId. Unknown
+// names fall back to the default (RENDERER_DX11).
 static inline RendererId Renderer_FromName(const char *name)
 {
     if (name && !strcmp(name, "psyx"))
         return RENDERER_PSYX;
+    if (name && !strcmp(name, "gl"))
+        return RENDERER_GL;
     // "dx11" and any unknown name -> default.
     return RENDERER_DX11;
 }
@@ -39,11 +42,13 @@ static inline const char *Renderer_ToName(RendererId id)
 {
     switch (id) {
         case RENDERER_PSYX: return "psyx";
+        case RENDERER_GL: return "gl";
         case RENDERER_DX11: default: return "dx11";
     }
 }
 
 static inline int Renderer_IsPsyX(void) { return gRenderer == RENDERER_PSYX; }
 static inline int Renderer_IsDX11(void) { return gRenderer == RENDERER_DX11; }
+static inline int Renderer_IsGL(void)   { return gRenderer == RENDERER_GL; }
 
 #endif // RENDERER_H
