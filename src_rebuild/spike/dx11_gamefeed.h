@@ -22,7 +22,7 @@
 #include "dx11_modeladapter.h"
 #include "dx11_stereo.h"
 #include "dx11_composite.h"
-#include "drawcmd.h"
+#include "render/drawcmd.h"
 
 #include <d3d11.h>
 
@@ -47,7 +47,8 @@ int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flat
 // `proj` is the shared per-eye projection (row-vector, column-major). `composite`
 // is a pre-created Dx11Composite. `cmdColors[i]` is the flat color for command i
 // (NULL -> white); the real game would supply the shading color it computes per
-// model. Returns 0 on success.
+// model. `bmpOut` captures the composite backbuffer to a BMP (NULL -> skip; the
+// in-game consumer passes NULL). Returns 0 on success.
 int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              Dx11Shaders *sh, Dx11DrawCmds *cmds,
                              Dx11Composite *composite,

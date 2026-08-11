@@ -99,4 +99,10 @@ int DrawCmd_Count(void);
 // Pointer to the command at `index`, or NULL if out of range.
 const DrawCommand *DrawCmd_At(int index);
 
+// Pointer to the contiguous command array (count = DrawCmd_Count()). Valid until
+// the next DrawCmd_BeginFrame/Submit. Used by the renderer to consume the whole
+// frame's commands in one pass. Returns NULL when the arena is empty/never
+// written.
+const DrawCommand *DrawCmd_Data(void);
+
 #endif // DRAWCMD_H

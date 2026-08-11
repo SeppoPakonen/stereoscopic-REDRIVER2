@@ -368,8 +368,23 @@ the in-game path — real terrain/tile geometry into the `DrawCommand` arena.
   bounds the per-frame arena.
 - Verified by build-link + inspection (the game doesn't reach `DrawGame`
   headless); the end-to-end renderer path is T5.1-proven. The consumer half
-  (DrawGame's dx11 branch calls `Dx11GameFeed_RenderFrame` and the GTE draw is
-  switched off) is the remaining integration step.
+  (DrawGame's dx11 branch calls `Dx11GameFeed_RenderFrame`) is done — see the
+  next section.
+
+**DrawGame dx11 consumer (T5.2, A/B):** the **consumer half** of the in-game
+path — `DrawGame`'s `-renderer dx11` branch now renders the arena to a
+**companion DX11 window** (`Dx11GameFeed_RenderFrame` → per-eye → MONO composite)
+**in parallel** with the legacy SDL/PsyX path, so the two can be compared on
+screen (per the owner's A/B choice). `dx11_gamefeed.{h,c}` is now compiled into
+the REDRIVER2 build (premake Windows filter); `drawcmd.c` gained `DrawCmd_Data()`
+(contiguous arena accessor); `Dx11GameFeed_RenderFrame`'s `CaptureToBMP` is
+guarded by `bmpOut` so the game passes NULL (no per-frame BMP). The `main.c`
+consumer (`Dx11GameDisplay` + `Dx11Game_EnsureDisplay` + `Dx11Game_RenderFrame`)
+lazily creates a cached `Dx11Renderer` (own window) + the full system, converts
+the game camera (`camera_position` → camPos, `camera_angle.vy` → yawRad) and the
+projection (from `FrAng`), and calls `Dx11GameFeed_RenderFrame` (MONO, untextured
+white resolve, `sep=0`). Verified by build-link + inspection. Follow-ups: real
+feed texture baking, pitch/roll camera, and a running-game A/B (user run).
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

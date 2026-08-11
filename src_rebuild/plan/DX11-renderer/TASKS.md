@@ -57,7 +57,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 - [x] **T4.5** Wire `-renderer gl` into the registry & build — [T4.5](T4.5-renderer-gl-registry-wiring.md)
 - [x] **T4.6** GL per-eye stereo + composite parity — [T4.6](T4.6-gl-stereo-composite-parity.md)
 - [x] **T5.1** In-game renderer integration (DrawCommand → per-eye → composite) — [T5.1](T5.1-in-game-renderer-integration.md)
-- [ ] **T5.2** Plot-function feed rewiring (game geometry → DrawCommand list) — [T5.2](T5.2-plot-function-feed-rewiring.md) *(terrain/tile core done: [T5.2 core](T5.2-terrain-tile-core.md))*
+- [ ] **T5.2** Plot-function feed rewiring (game geometry → DrawCommand list) — [T5.2](T5.2-plot-function-feed-rewiring.md) *(terrain/tile core + DrawGame dx11 consumer done: [T5.2 core](T5.2-terrain-tile-core.md), [T5.2 consumer](T5.2-dx11-consumer-drawgame.md))*
 
 ## Out of scope (for now)
 

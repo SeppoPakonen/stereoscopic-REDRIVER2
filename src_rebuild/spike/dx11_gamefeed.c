@@ -7,7 +7,7 @@
 
 #include "dx11_gamefeed.h"
 
-#include "mdl.h"           // MODEL, PL_POLYFT4, SVECTOR
+#include "engine/mdl.h"    // MODEL, PL_POLYFT4, SVECTOR
 #include "libgte.h"        // MATRIX
 
 #include <stdio.h>
@@ -188,7 +188,8 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                             Dx11Renderer_GetOffscreenSRV(ren, 0),
                             Dx11Renderer_GetOffscreenSRV(ren, 1),
                             w, h);
-    Dx11Renderer_CaptureToBMP(ren, NULL, bmpOut, NULL);
+    if (bmpOut)   // optional: the in-game consumer passes NULL (no per-frame BMP)
+        Dx11Renderer_CaptureToBMP(ren, NULL, bmpOut, NULL);
     Dx11Renderer_Present(ren);
     return 0;
 }

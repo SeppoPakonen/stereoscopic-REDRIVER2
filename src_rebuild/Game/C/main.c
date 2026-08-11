@@ -43,6 +43,8 @@
 #if defined(_WIN32)
 #include "dx11_renderer.h"
 #include "gl_renderer.h"
+#include "dx11_gamefeed.h"
+#include <math.h>
 #endif
 #include "PsyX/PsyX_render.h"
 #include "overlay.h"
@@ -1638,6 +1640,106 @@ void State_GameLoop(void* param)
 	_CutRec_Step();
 }
 
+#if defined(_WIN32)
+// --- T5.2 DrawGame dx11 consumer (A/B parallel display) ---
+// Lazily-created DX11 renderer (own companion Win32 window) that renders the
+// draw-command arena each frame via Dx11GameFeed_RenderFrame, in parallel with
+// the legacy SDL/PsyX path so the two can be compared on screen. The feed
+// currently covers terrain/tiles only (T5.2 core); real texture baking for the
+// feed is a follow-up (untextured/white for now).
+typedef struct {
+	Dx11Renderer* ren;
+	Dx11Res* res;
+	Dx11Tex* tex;
+	Dx11Shaders* sh;
+	Dx11DrawCmds* cmds;
+	Dx11Composite* comp;
+	int tried;
+	int ok;
+} Dx11GameDisplay;
+
+static Dx11GameDisplay g_dx11GameDisplay;
+
+static int Dx11Game_EnsureDisplay(void)
+{
+	if (g_dx11GameDisplay.tried)
+		return g_dx11GameDisplay.ok;
+	g_dx11GameDisplay.tried = 1;
+
+	Dx11RendererConfig rcfg = { 640, 480, 320, 240, 0, 0 };
+	Dx11RendererResult rr;
+	Dx11Renderer* ren = Dx11Renderer_Create(&rcfg, &rr);
+	if (!ren)
+		return 0;
+	ID3D11Device* dev = Dx11Renderer_GetDevice(ren);
+	ID3D11DeviceContext* ctx = Dx11Renderer_GetContext(ren);
+	Dx11ResResult rsres;  Dx11Res* res = Dx11Res_Create(dev, ctx, NULL, &rsres);
+	Dx11TexResult tr;     Dx11Tex* tex = Dx11Tex_Create(dev, ctx, NULL, &tr);
+	Dx11ShadersResult sr; Dx11Shaders* sh = Dx11Shaders_Create(dev, ctx, &sr);
+	Dx11DrawCmdsResult cr; Dx11DrawCmds* cmds = Dx11DrawCmds_Create(dev, ctx, res, tex, sh, NULL, &cr);
+	Dx11CompositeResult cpr; Dx11Composite* comp = Dx11Composite_Create(dev, ctx, &cpr);
+	if (!res || !tex || !sh || !cmds || !comp)
+	{
+		Dx11Renderer_Destroy(ren);
+		return 0;
+	}
+	g_dx11GameDisplay.ren = ren;
+	g_dx11GameDisplay.res = res;
+	g_dx11GameDisplay.tex = tex;
+	g_dx11GameDisplay.sh = sh;
+	g_dx11GameDisplay.cmds = cmds;
+	g_dx11GameDisplay.comp = comp;
+	g_dx11GameDisplay.ok = 1;
+	return 1;
+}
+
+static int Dx11Game_TexResolveUntextured(void* user, unsigned char set, unsigned char id, Dx11ModelTexture* out)
+{
+	(void)user; (void)set; (void)id; (void)out;
+	return 1;   // untextured (white substitute) until real feed texture baking lands
+}
+
+// Perspective RH projection (row-vector, column-major) — same as the T5.1 harness.
+static void Dx11Game_MatPerspectiveRH(float fovY, float aspect, float zn, float zf, float m[4][4])
+{
+	memset(m, 0, 16 * sizeof(float));
+	float f = 1.0f / tanf(fovY * 0.5f);
+	m[0][0] = f / aspect;
+	m[1][1] = f;
+	m[2][2] = zf / (zn - zf);
+	m[2][3] = zn * zf / (zn - zf);
+	m[3][2] = -1.0f;
+}
+
+static void Dx11Game_RenderFrame(void)
+{
+	int num = DrawCmd_Count();
+	if (num <= 0)
+		return;
+	if (!Dx11Game_EnsureDisplay())
+		return;
+
+	// Camera: game world pos + yaw (game angle 4096 = 2*pi). The DX11 camera is
+	// yaw-only (Dx11Stereo_ViewMatrix); pitch/roll are ignored for now.
+	float camPos[3] = { (float)camera_position.vx, (float)camera_position.vy, (float)camera_position.vz };
+	float yawRad = (float)camera_angle.vy * (6.2831853f / 4096.0f);
+
+	// Projection from the game's FrAng (horizontal half-FOV, game angle units).
+	float fovH = (float)FrAng * (6.2831853f / 4096.0f);
+	float fovV = 2.0f * atanf(tanf(fovH) * (240.0f / 320.0f));
+	float proj[4][4];
+	Dx11Game_MatPerspectiveRH(fovV, 320.0f / 240.0f, 1.0f, 200000.0f, proj);
+
+	Dx11GameFeed_RenderFrame(g_dx11GameDisplay.ren, g_dx11GameDisplay.res,
+	                         g_dx11GameDisplay.tex, g_dx11GameDisplay.sh,
+	                         g_dx11GameDisplay.cmds, g_dx11GameDisplay.comp,
+	                         proj, DrawCmd_Data(), num, NULL /*cmdColors*/,
+	                         camPos, yawRad, 0.0f /*sep*/, 0 /*swap*/,
+	                         DX11C_MODE_MONO, NULL /*texUser*/,
+	                         Dx11Game_TexResolveUntextured, NULL /*bmpOut*/);
+}
+#endif // _WIN32
+
 int ObjectDrawnValue = 0;
 
 // [D] [T]
@@ -1648,11 +1750,10 @@ void DrawGame(void)
 	StereoLog_Open();
 
 	// --- Renderer backend dispatch (T0.1) ---
-	// The DX11 backend is the default but the full draw path is not wired yet
-	// (Phase 1+). The dx11 branch genuinely probes the DX11 stack and logs it;
-	// until the draw-command DX11 renderer lands, both backends run the legacy
-	// path so the game stays playable. This dispatch point is where the DX11
-	// render path is inserted later.
+	// The DX11 backend is the default. The dx11 branch probes the DX11 stack and
+	// (T5.2 consumer) also renders the draw-command arena to a companion DX11
+	// window in parallel with the legacy path (A/B). The psyx/gl branches run
+	// the legacy path only.
 	if (Renderer_IsDX11()) {
 #if defined(_WIN32)
 		StereoLog_Write("DrawGame: backend=dx11 dx11_available=%d",
@@ -1825,6 +1926,13 @@ void DrawGame(void)
 	}
 
 #ifndef PSX
+	// T5.2 dx11 consumer: render the DrawCommand arena to the companion DX11
+	// window (A/B) before the legacy present. Only active under -renderer dx11.
+	if (Renderer_IsDX11()) {
+#if defined(_WIN32)
+		Dx11Game_RenderFrame();
+#endif
+	}
 	if (!FadingScreen)
 		PsyX_EndScene();
 #endif

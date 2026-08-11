@@ -197,10 +197,19 @@ slice (T5.1) are **complete**:
   `DrawTILES` (tile.c) submit world-space `DrawCommand`s under `-renderer dx11`
   (world rotation `matrixtable[yang]`/`matrix` + world `pos`; `sortKey = z>>1`,
   opaque/two-sided/flat flags), with `DrawCmd_BeginFrame()` in `RenderGame2`
-  (main.c). The legacy GTE draw is kept in parallel (non-breaking until DrawGame
-  consumes the arena). Verified by build-link + inspection. Still to do: cars,
-  sprites/sky/effects, and the DrawGame dx11 branch that consumes the arena via
-  `Dx11GameFeed_RenderFrame` (switching the GTE draw off).
+  (main.c). Verified by build-link + inspection. Still to do: cars,
+  sprites/sky/effects.
+- **DrawGame dx11 consumer (T5.2, A/B)**: the **consumer half** — `DrawGame`'s
+  `-renderer dx11` branch now renders the arena to a **companion DX11 window**
+  (`Dx11GameFeed_RenderFrame` → per-eye → MONO composite) **in parallel** with
+  the legacy SDL/PsyX path (the GTE draw stays on so the SDL window shows the
+  full legacy scene). `dx11_gamefeed.{h,c}` is now in the REDRIVER2 build;
+  `drawcmd.c` gained `DrawCmd_Data()`; the `main.c` consumer (`Dx11GameDisplay`,
+  `Dx11Game_EnsureDisplay`, `Dx11Game_RenderFrame`) lazily creates a cached
+  `Dx11Renderer` (own window) + system, converts the game camera/projection, and
+  renders the feed (MONO, untextured white resolve for now — real feed texture
+  baking is a follow-up). Verified by build-link + inspection; a running-game A/B
+  requires a user run.
 
 Build: `premake5 gmake2 --os=windows` + `mingw32-make <proj>
 config=release_dev_x86` (32-bit mingw32; the game's known-good PsyCross path).
@@ -211,10 +220,10 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 ## Next Steps for Future Development
 
 1. Finish the plot-function feed rewiring: cars (DrawCar chain), sprites/sky/
-   effects, then the DrawGame dx11 branch that consumes the arena via
-   `Dx11GameFeed_RenderFrame` and switches the GTE draw off. The terrain/tile
-   core is done (T5.2 `PlotFeed_SubmitModel` + `RenderModel` + `DrawTILES`);
-   needs a running game to verify.
+   effects. The terrain/tile feed (T5.2 core) + the DrawGame dx11 consumer (A/B
+   companion window) are done; the DX11 window currently shows the terrain feed
+   untextured (white) — real feed texture baking, pitch/roll camera, and a
+   running-game A/B are the immediate follow-ups.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
@@ -226,5 +235,5 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 **Last Updated**: 2026-08-11
 **Phase**: 4 (Integration & cleanup — renderer rewrite)
 **Status**: Phase 4 done (T4.1–T4.6) + T5.1 renderer integration + T5.2
-terrain/tile feed core; launcher + stereo GUI working, DX11 + modern GL
-backends selectable, mono/per-eye/stereo-composite A/B-verified
+terrain/tile feed + DrawGame dx11 consumer (A/B); launcher + stereo GUI working,
+DX11 + modern GL backends selectable, mono/per-eye/stereo-composite A/B-verified

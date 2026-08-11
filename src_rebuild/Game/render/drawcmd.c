@@ -53,3 +53,8 @@ const DrawCommand *DrawCmd_At(int index)
         return NULL;
     return &s_cmd[index];
 }
+
+const DrawCommand *DrawCmd_Data(void)
+{
+    return s_cmd;
+}
