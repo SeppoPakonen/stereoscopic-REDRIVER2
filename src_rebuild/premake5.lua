@@ -931,6 +931,95 @@ project "dx11_rendererselect"
         symbols "On"
 
 -- ---------------------------------------------------------------------------
+-- DX11 dual-backend A/B (T4.2): DX11-side of the store/load harness. Links ONLY
+-- the DX11 draw-command stack (no psyx/PsyCross sources) and renders the common
+-- T4.2 screen-space scene with an orthographic screen->NDC projection. Driven by
+-- dx11_backendab_dx11.cpp; the psyx reference is the separate dx11_backendab_psyx
+-- binary. Verified headless via -store/-load/-compare + BMP probes.
+-- ---------------------------------------------------------------------------
+project "dx11_backendab_dx11"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    files {
+        "spike/dx11_backendab_state.h",
+        "spike/dx11_backendab_dx11.cpp",
+        "spike/dx11_renderer.h", "spike/dx11_renderer.c",
+        "spike/dx11_resources.h", "spike/dx11_resources.c",
+        "spike/dx11_textures.h", "spike/dx11_textures.c",
+        "spike/dx11_shaders.h", "spike/dx11_shaders.c",
+        "spike/dx11_drawcmdexec.h", "spike/dx11_drawcmdexec.c",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter { "files:**.c", "files:**.C" }
+        compileas "C++"
+
+    filter { "system:Windows" }
+        links {
+            "d3d11",
+            "dxgi",
+            "d3dcompiler",
+            "user32",
+            "gdi32",
+        }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
+-- DX11 dual-backend A/B, psyx side (T4.2): the reference/fallback backend. Links
+-- ONLY the PsyCross GL primitive path (no DX11 sources) and renders the common
+-- T4.2 screen-space scene via POLY_F4 + addPrim/DrawOTag. The DX11 binary is the
+-- separate dx11_backendab_dx11; together they prove clean backend separation +
+-- store/load A/B. Driven by dx11_backendab_psyx.cpp.
+-- ---------------------------------------------------------------------------
+project "dx11_backendab_psyx"
+    kind "WindowedApp"
+    language "C++"
+    targetdir "bin/%{cfg.buildcfg}"
+
+    uses {
+        "PsyCross",
+    }
+
+    files {
+        "spike/dx11_backendab_state.h",
+        "spike/dx11_backendab_psyx.cpp",
+    }
+
+    includedirs {
+        "spike",
+    }
+
+    filter "configurations:Debug"
+        targetsuffix "_dbg"
+        symbols "On"
+        defines { "_DEBUG" }
+
+    filter "configurations:Release"
+        optimize "Speed"
+
+    filter "configurations:Release_dev"
+        targetsuffix "_dev"
+        optimize "Speed"
+        symbols "On"
+
+-- ---------------------------------------------------------------------------
 -- DX11 stereo-scene / right-eye verification (T2.4): renders a representative
 -- scene (map/terrain quad + car quad) into BOTH per-eye RTs through the stereo
 -- path (Dx11Stereo_ViewMatrix per-eye view + T2.1 independent eye RTs) and

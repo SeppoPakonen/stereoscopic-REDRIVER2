@@ -251,6 +251,35 @@ dispatches on `-renderer dx11` (calls `Dx11Renderer_Available()`) vs
   objects (symmetric apart from the lateral offset). Caught and fixed the
   `ViewMatrix` `V`-vs-`V^t` convention bug (see `dx11_stereo`). Probes:
   `MAP_L`/`MAP_R`, `CAR_L`/`CAR_R`, `DUAL_DRAWCOUNT`, `SYMMETRIC` — all PASS.
+- **`dx11_backendab_state.h`** (T4.2) — the common **store/load world-state**
+  format shared by the two backend A/B binaries: a screen resolution + a list of
+  flat screen-space quads (`Dx11AbScene`), written by `-store` and read by
+  `-load`. This is the emulator-style state snapshot that lets one backend save
+  [state + screenshot] in one render and the other reproduce it immediately
+  (no engine iterations).
+- **`dx11_backendab_psyx.cpp`** (T4.2) — **psyx-only backend binary**: links
+  ONLY the PsyCross GL primitive path (`PsyX_Initialise` + POLY_F4 +
+  `addPrim`/`DrawOTag`) — no DX11 code. It renders the common scene via the
+  ordering table and captures the window to a BMP (`-store`/`-load`). This is
+  the **reference/fallback** backend output. Follows the game's `E3stuff.c`
+  render-loop model (single-depth OT, `SetDispMask`, env put, read the window
+  **before** `PsyX_EndScene`).
+- **`dx11_backendab_dx11.cpp`** (T4.2) — **DX11-only backend binary**: links
+  ONLY the DX11 draw-command stack — no psyx/PsyCross sources. Renders the same
+  scene with an orthographic screen→NDC projection (stored in the `P^t`
+  convention: translations in `M[0][3]`/`M[1][3]`, `twoSided` for the y-flip
+  winding) and captures to a BMP. Also hosts the `-compare` step (game-agnostic
+  BMP+state reader) that proves both binaries reproduced the same scene from the
+  identical stored state. Probes: `SELF` per quad + `COMPARE IDENTICAL` — all
+  PASS.
+
+**psyx = reference/fallback backend (T4.2):** the legacy PsyX/PsyCross GL path
+(`-renderer psyx`) is documented and verified as the reference/fallback. The two
+T4.2 binaries are built **separately** (`dx11_backendab_dx11` imports only
+`d3d11`/`D3DCOMPILER_47` — no SDL2/GL; `dx11_backendab_psyx` imports only
+`SDL2` — no d3d11), proving the DX11 binary contains no psyx code and vice
+versa, and the `-store`/`-load` A/B shows both reproduce the identical scene
+from the same world-state.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.
