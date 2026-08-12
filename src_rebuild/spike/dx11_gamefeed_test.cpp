@@ -264,6 +264,46 @@ static void TestBillboardConverter(FILE* resf, int* fails) {
     if (!okWorld) ++(*fails);
 }
 
+// Focused unit test for the pitch/roll view basis path
+// (Dx11Stereo_ViewMatrixBasis): verifies that feeding the yaw-derived basis
+// reproduces the proven yaw view exactly, and that a tilted (pitched/rolled)
+// basis produces a different view (the full camera orientation is applied).
+static void TestViewBasis(FILE* resf, int* fails) {
+    float camPos[3] = { 10, 20, 30 };
+    float yaw = 0.7f;
+
+    // Yaw basis = the Dx11Stereo_ViewMatrix basis; must reproduce it exactly.
+    float right[3] = { cosf(yaw), 0.0f, sinf(yaw) };
+    float up[3]    = { 0.0f, 1.0f, 0.0f };
+    float negFwd[3]= { -sinf(yaw), 0.0f, cosf(yaw) };
+    float basisMat[4][4], yawMat[4][4];
+    Dx11Stereo_ViewMatrixBasis(camPos, right, up, negFwd, DX11STEREO_EYE_MONO, 0, 0, basisMat);
+    Dx11Stereo_ViewMatrix(camPos, yaw, DX11STEREO_EYE_MONO, 0, 0, yawMat);
+    int okYaw = 1;
+    for (int i = 0; i < 4 && okYaw; ++i)
+        for (int j = 0; j < 4; ++j)
+            if (fabsf(basisMat[i][j] - yawMat[i][j]) > 1e-4f) { okYaw = 0; break; }
+
+    // A tilted (rolled) basis must change the view vs the yaw one.
+    float tUp[3]    = { 0.0f, cosf(0.5f), sinf(0.5f) };
+    float tNegFwd[3]= { 0.0f, -sinf(0.5f), cosf(0.5f) };
+    float tiltMat[4][4];
+    Dx11Stereo_ViewMatrixBasis(camPos, right, tUp, tNegFwd, DX11STEREO_EYE_MONO, 0, 0, tiltMat);
+    float maxDiff = 0.0f;
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) {
+            float d = fabsf(tiltMat[i][j] - yawMat[i][j]);
+            if (d > maxDiff) maxDiff = d;
+        }
+    int okTilt = (maxDiff > 1e-4f);   // the tilted basis must change the view
+
+    fprintf(resf, "BASIS_FEED yaw-match=%s tilt-applied=%s %s\n",
+            okYaw ? "ok" : "FAIL", okTilt ? "ok" : "FAIL",
+            (okYaw && okTilt) ? "PASS" : "FAIL");
+    if (!okYaw) ++(*fails);
+    if (!okTilt) ++(*fails);
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11RendererConfig rcfg = { 640, 240, 320, 240, 0, 0 };   // window 2x for SBS
     Dx11RendererResult rr;
@@ -313,13 +353,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     TestSkyModelConverter(resf, &fails);
     // T5.2 addPrim single-primitive billboard converter unit test (no renderer).
     TestBillboardConverter(resf, &fails);
+    // T5.2 pitch/roll view basis unit test (no renderer).
+    TestViewBasis(resf, &fails);
 
     // SBS composite: left half = eye0, right half = eye1.
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_SBS, NULL, TexResolve_Untextured,
                              NULL /*tpages*/, NULL /*civClut*/, NULL /*skyTex*/,
-                             "dx11_gamefeed.bmp", NULL /*customView*/);
+                             "dx11_gamefeed.bmp", NULL /*customView*/, NULL /*basis*/);
 
     int iw = 320, cy = 120;
     // NDC x = m[0][0] * (x / -z), m[0][0] = (1/tan(30deg)) / aspect = 1.299.
@@ -354,7 +396,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_MONO, NULL, TexResolve_Untextured,
                              NULL /*tpages*/, NULL /*civClut*/, NULL /*skyTex*/,
-                             "dx11_gamefeed_mono.bmp", NULL /*customView*/);
+                             "dx11_gamefeed_mono.bmp", NULL /*customView*/, NULL /*basis*/);
     int okMonoMap = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * mapCol, 120, &r, &g, &b) == 0 && IsGreen(r, g, b));
     int okMonoCar = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * carCol, 120, &r, &g, &b) == 0 && IsRed(r, g, b));
     fprintf(resf, "MONO map(%d,120)=%s car(%d,120)=%s %s\n",

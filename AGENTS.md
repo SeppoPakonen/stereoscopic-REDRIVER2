@@ -243,6 +243,17 @@ slice (T5.1) are **complete**:
   `BILLBOARD_FEED` converter unit test (`GAMEFEED=PASS`) + inspection. Deferred:
   the real in-game visual A/B vs `-renderer psyx` (user run). See
   `plan/DX11-renderer/T5.2-sprite-sky-effects.md`.
+- **Pitch/roll camera (full `inv_camera_matrix` basis)**: the DX11 companion
+  view now follows the game camera's full orientation (yaw + pitch + roll), not
+  just yaw. `Dx11Stereo_ViewMatrixBasis` (dx11_stereo.c) builds the per-eye
+  world→view from an explicit orthonormal basis (right / up / -forward) — the
+  stereo lateral offset is still applied along `right`. `Dx11GameFeed_RenderFrame`
+  gained a `customViewBasis` param; `main.c` `Dx11Game_RenderFrame` feeds the
+  camera basis from the game's `inv_camera_matrix` rows (normalized per row to
+  drop the aspect horizontal scale, which the DX11 projection handles). The
+  `+π` yaw fix is subsumed by using the actual rotation. Verified by build-link
+  + a headless `BASIS_FEED` unit test (yaw basis reproduces the yaw view exactly;
+  a tilted basis changes it) — `GAMEFEED=PASS`.
 - **DrawGame dx11 consumer (T5.2, A/B)**: the **consumer half** — `DrawGame`'s
   `-renderer dx11` branch now renders the arena to a **companion DX11 window**
   (`Dx11GameFeed_RenderFrame` → per-eye → MONO composite) **in parallel** with
@@ -280,7 +291,7 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
    consumer (A/B companion window) + real feed texture baking + the in-game A/B
    verification + the car body/wheels feed + the MODEL-based sprites/effects
    feed + the sky feed + the addPrim single-primitive effects feed + the
-   sprite-shadow feed. Pitch/roll camera is the immediate follow-up.
+   sprite-shadow feed + the pitch/roll (full `inv_camera_matrix`-basis) camera.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
@@ -298,5 +309,7 @@ terrain/tile feed + DrawGame dx11 consumer (A/B) + in-game A/B verified
 effects feed + sky feed (skytpage/skyclut/skytexuv, headless SKY_FEED test
 PASS) + addPrim single-primitive effects feed (billboard mesh==NULL+material
 path, headless BILLBOARD_FEED test PASS) + sprite-shadow feed
-(addSubdivSpriteShadow as a ground billboard); launcher + stereo GUI working,
-DX11 + modern GL backends selectable, mono/per-eye/stereo-composite A/B-verified
+(addSubdivSpriteShadow as a ground billboard) + pitch/roll camera
+(full inv_camera_matrix basis, headless BASIS_FEED test PASS); launcher + stereo
+GUI working, DX11 + modern GL backends selectable, mono/per-eye/stereo-composite
+A/B-verified

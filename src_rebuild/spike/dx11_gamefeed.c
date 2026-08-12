@@ -453,7 +453,8 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              const u_short (*civClut)[32][6],
                              const Dx11SkyTextures *skyTex,
                              const char *bmpOut,
-                             const float (*customView)[4]) {
+                             const float (*customView)[4],
+                             const float (*customViewBasis)[3]) {
     ID3D11DeviceContext *ctx = Dx11Renderer_GetContext(ren);
     int iw = Dx11Renderer_GetInternalWidth(ren), ih = Dx11Renderer_GetInternalHeight(ren);
     int w = Dx11Renderer_GetWindowWidth(ren), h = Dx11Renderer_GetWindowHeight(ren);
@@ -471,6 +472,13 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
         float view[4][4], vp[4][4];
         if (customView) {
             memcpy(view, customView, sizeof(view));
+        } else if (customViewBasis) {
+            // Full camera orientation (yaw+pitch+roll) from the game's
+            // inv_camera_matrix rows; the per-eye stereo offset is still applied
+            // along `right`.
+            Dx11Stereo_ViewMatrixBasis(camPos, customViewBasis[0],
+                                       customViewBasis[1], customViewBasis[2],
+                                       eyes[e], sep, swap, view);
         } else {
             Dx11Stereo_ViewMatrix(camPos, yawRad, eyes[e], sep, swap, view);
         }

@@ -108,7 +108,12 @@ int Dx11GameFeed_BillboardToMesh(const float center[3], int orient,
 // (NULL -> white); the real game would supply the shading color it computes per
 // model. `bmpOut` captures the composite backbuffer to a BMP (NULL -> skip; the
 // in-game consumer passes NULL). `tpages` is the game's texture_pages[128] (or
-// NULL for no UV scaling). Returns 0 on success.
+// NULL for no UV scaling). `customView` (NULL = yaw-based) is a single
+// world->view matrix used verbatim for both eyes; `customViewBasis` (NULL =
+// yaw-based) is an orthonormal camera basis (3 rows: right, up, -forward) used
+// to build the per-eye views via Dx11Stereo_ViewMatrixBasis (keeps the stereo
+// lateral offset) — the game feeds its inv_camera_matrix rows here for the full
+// yaw+pitch+roll orientation. Returns 0 on success.
 int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              Dx11Shaders *sh, Dx11DrawCmds *cmds,
                              Dx11Composite *composite,
@@ -122,7 +127,8 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              const u_short (*civClut)[32][6],
                              const Dx11SkyTextures *skyTex,
                              const char *bmpOut,
-                             const float (*customView)[4]);
+                             const float (*customView)[4],
+                             const float (*customViewBasis)[3]);
 
 #ifdef __cplusplus
 }

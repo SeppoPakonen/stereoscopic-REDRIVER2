@@ -381,9 +381,21 @@ the REDRIVER2 build (premake Windows filter); `drawcmd.c` gained `DrawCmd_Data()
 guarded by `bmpOut` so the game passes NULL (no per-frame BMP). The `main.c`
 consumer (`Dx11GameDisplay` + `Dx11Game_EnsureDisplay` + `Dx11Game_RenderFrame`)
 lazily creates a cached `Dx11Renderer` (own window) + the full system, converts
-the game camera (`camera_position` → camPos, `camera_angle.vy` → yawRad) and the
-projection (from `FrAng`), and calls `Dx11GameFeed_RenderFrame` (MONO,
-`sep=0`). Follow-up: pitch/roll camera.
+the game camera (`camera_position` → camPos, `inv_camera_matrix` rows → the full
+yaw+pitch+roll camera basis) and the projection (from `FrAng`), and calls
+`Dx11GameFeed_RenderFrame` (MONO, `sep=0`).
+
+**Pitch/roll camera (full `inv_camera_matrix` basis):** the companion window's
+view now follows the game camera's full orientation, not just yaw.
+`Dx11Stereo_ViewMatrixBasis` (dx11_stereo.c) builds the per-eye world→view from
+an explicit orthonormal basis (right / up / −forward), applying the stereo
+lateral offset along `right`; `Dx11GameFeed_RenderFrame` gained a
+`customViewBasis` param; `main.c` feeds the basis from `inv_camera_matrix`'s
+rows (normalized per row to drop the game's pre-multiplied aspect horizontal
+scale, which the DX11 projection already handles). The earlier `yawRad += π`
+alignment is subsumed by using the actual rotation matrix. Verified by build-link
++ a headless `BASIS_FEED` unit test (the yaw basis reproduces the proven yaw view
+exactly; a tilted basis changes the view) — `TOTAL_FAILS=0 GAMEFEED=PASS`.
 
 **Feed texture baking (T5.2):** the consumer's companion window now renders the
 terrain feed with **real PSX textures** instead of the white substitute.

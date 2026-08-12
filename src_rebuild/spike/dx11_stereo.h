@@ -46,6 +46,20 @@ void Dx11Stereo_EyeOffset(float yawRad, Dx11StereoEye eye, float separation,
 void Dx11Stereo_ViewMatrix(const float camPos[3], float yawRad, Dx11StereoEye eye,
                            float separation, int swap, float mat[4][4]);
 
+// Builds the world->view matrix for an eye from an explicit orthonormal camera
+// basis (right / up / -forward as world axes) instead of deriving it from yaw.
+// This lets the game feed the full camera orientation (yaw + pitch + roll) via
+// its own inv_camera_matrix rows, matching the GTE view the plot functions use.
+// The per-eye world position is camPos + off where off is the lateral offset
+// ALONG `right` (gain = sep*2, left -> -right*gain, right -> +right*gain,
+// swap negates); MONO / sep=0 -> no offset. Output is the same V^t storage as
+// Dx11Stereo_ViewMatrix. The basis is NOT normalized here (the caller passes
+// unit vectors).
+void Dx11Stereo_ViewMatrixBasis(const float camPos[3],
+                                const float right[3], const float up[3],
+                                const float negFwd[3], Dx11StereoEye eye,
+                                float separation, int swap, float mat[4][4]);
+
 // ---------------------------------------------------------------------------
 // Convergence (projection shear)
 // ---------------------------------------------------------------------------

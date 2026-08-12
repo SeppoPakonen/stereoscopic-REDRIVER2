@@ -58,6 +58,38 @@ void Dx11Stereo_ViewMatrix(const float camPos[3], float yawRad, Dx11StereoEye ey
     mat[3][3] = 1.0f;
 }
 
+void Dx11Stereo_ViewMatrixBasis(const float camPos[3],
+                                const float right[3], const float up[3],
+                                const float negFwd[3], Dx11StereoEye eye,
+                                float separation, int swap, float mat[4][4])
+{
+    memset(mat, 0, 16 * sizeof(float));
+
+    // Per-eye lateral offset along the camera's real right basis (so a rolled
+    // camera still separates horizontally-correct); MONO/sep=0 -> zero.
+    float off[3] = { 0, 0, 0 };
+    if (eye != DX11STEREO_EYE_MONO && separation != 0.0f) {
+        if (swap)
+            eye = (eye == DX11STEREO_EYE_LEFT) ? DX11STEREO_EYE_RIGHT : DX11STEREO_EYE_LEFT;
+        float gain = separation * 2.0f;
+        float sign = (eye == DX11STEREO_EYE_LEFT) ? -1.0f : 1.0f;
+        off[0] = sign * right[0] * gain;
+        off[1] = sign * right[1] * gain;
+        off[2] = sign * right[2] * gain;
+    }
+    float eyePos[3] = { camPos[0] + off[0], camPos[1] + off[1], camPos[2] + off[2] };
+
+    // Same V^t storage as Dx11Stereo_ViewMatrix: columns hold the basis, the
+    // translation -R*eyePos lives in the last row.
+    mat[0][0] = right[0]; mat[0][1] = up[0];    mat[0][2] = negFwd[0];
+    mat[1][0] = right[1]; mat[1][1] = up[1];    mat[1][2] = negFwd[1];
+    mat[2][0] = right[2]; mat[2][1] = up[2];    mat[2][2] = negFwd[2];
+    mat[3][0] = -(right[0]*eyePos[0] + right[1]*eyePos[1] + right[2]*eyePos[2]);
+    mat[3][1] = -(up[0]*eyePos[0] + up[1]*eyePos[1] + up[2]*eyePos[2]);
+    mat[3][2] = -(negFwd[0]*eyePos[0] + negFwd[1]*eyePos[1] + negFwd[2]*eyePos[2]);
+    mat[3][3] = 1.0f;
+}
+
 void Dx11Stereo_ApplyConvergence(float mat[4][4], float shift)
 {
     for (int i = 0; i < 4; ++i)

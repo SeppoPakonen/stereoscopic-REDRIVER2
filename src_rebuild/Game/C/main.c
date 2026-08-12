@@ -1743,14 +1743,33 @@ static void Dx11Game_RenderFrame(void)
 	Dx11Tex_CopyVRAM(g_dx11GameDisplay.tex, g_dx11VramCopy, 0, 0,
 	                 DX11TEX_VRAM_W, DX11TEX_VRAM_H, 0, 0);
 
-	// Camera: game world pos + yaw (game angle 4096 = 2*pi). The DX11 camera is
-	// yaw-only (Dx11Stereo_ViewMatrix); pitch/roll are ignored for now. The +pi
-	// turns the yaw-derived forward to match the game's GTE view (RotMatrixY(-yaw),
-	// forward = +view z = (-sin,0,+cos)); the DX11 forward is (sin,0,-cos), so a
-	// half-turn aligns the two while keeping the DX11 right-handed (front = -z)
-	// convention the projection expects.
+	// Camera: game world pos + full orientation (yaw + pitch + roll) from the
+	// game's world->view rotation inv_camera_matrix. Its rows are the camera's
+	// right / up / -forward axes in world space (row 0 = right, row 1 = up,
+	// row 2 = forward, which is the DX11 view's -forward since the game camera
+	// looks down +camera-z). The aspect horizontal scale (the game pre-multiplies
+	// inv_camera_matrix by the aspect matrix) is normalized out per row — the DX11
+	// projection handles aspect itself. This matches the GTE view the plot
+	// functions use, so the companion window now follows the game camera's pitch
+	// and roll (not just yaw). The +yaw pi alignment is subsumed by using the
+	// actual rotation matrix.
 	float camPos[3] = { (float)camera_position.vx, (float)camera_position.vy, (float)camera_position.vz };
-	float yawRad = (float)camera_angle.vy * (6.2831853f / 4096.0f) + 3.1415927f;
+	float viewBasis[3][3];
+	{
+		float invRows[3][3] = {
+			{ (float)inv_camera_matrix.m[0][0] / 4096.0f, (float)inv_camera_matrix.m[0][1] / 4096.0f, (float)inv_camera_matrix.m[0][2] / 4096.0f },
+			{ (float)inv_camera_matrix.m[1][0] / 4096.0f, (float)inv_camera_matrix.m[1][1] / 4096.0f, (float)inv_camera_matrix.m[1][2] / 4096.0f },
+			{ (float)inv_camera_matrix.m[2][0] / 4096.0f, (float)inv_camera_matrix.m[2][1] / 4096.0f, (float)inv_camera_matrix.m[2][2] / 4096.0f },
+		};
+		for (int r = 0; r < 3; r++)
+		{
+			float len = sqrtf(invRows[r][0]*invRows[r][0] + invRows[r][1]*invRows[r][1] + invRows[r][2]*invRows[r][2]);
+			if (len < 1e-6f) len = 1.0f;
+			viewBasis[r][0] = invRows[r][0] / len;
+			viewBasis[r][1] = invRows[r][1] / len;
+			viewBasis[r][2] = invRows[r][2] / len;
+		}
+	}
 
 	// Projection from the game's FrAng (horizontal half-FOV, game angle units).
 	float fovH = (float)FrAng * (6.2831853f / 4096.0f);
@@ -1771,13 +1790,14 @@ static void Dx11Game_RenderFrame(void)
 	                         g_dx11GameDisplay.tex, g_dx11GameDisplay.sh,
 	                         g_dx11GameDisplay.cmds, g_dx11GameDisplay.comp,
 	                         proj, DrawCmd_Data(), num, NULL /*cmdColors*/,
-	                         camPos, yawRad, 0.0f /*sep*/, 0 /*swap*/,
+	                         camPos, 0.0f /*yawRad (unused: basis supplied)*/, 0.0f /*sep*/, 0 /*swap*/,
 	                         DX11C_MODE_MONO, NULL /*texUser*/,
 	                         Dx11Game_TexResolve, texture_pages /*tpages*/,
 	                         civ_clut /*car body civ_clut table*/,
 	                         &skyTex /*sky texture tables*/,
 	                         NULL /*bmpOut*/,
-	                         NULL /*customView*/);
+	                         NULL /*customView*/,
+	                         (const float(*)[3])viewBasis /*full camera basis*/);
 }
 #endif // _WIN32
 
