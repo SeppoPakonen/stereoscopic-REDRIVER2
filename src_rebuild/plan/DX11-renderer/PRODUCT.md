@@ -528,9 +528,15 @@ path**:
 Verified by build-link + a headless `BILLBOARD_FEED` converter unit test
 (camera-facing + world-ground quad geometry, page-scaled UVs, blend mapping,
 carTexture/tpage/clut direct-bake, flat color): `TOTAL_FAILS=0 GAMEFEED=PASS`.
-Deferred: the projected subdiv sprite-shadow (`addSubdivSpriteShadow` — a
-ground-projected subdiv mesh, not a single primitive) + the real in-game visual
-A/B (user run). Full detail: `T5.2-sprite-sky-effects.md`.
+The **sprite-shadows** (`addSubdivSpriteShadow`) reuse the same billboard path:
+`PlotFeed_SubmitSpriteShadow` (draw.c) submits each shadow as a ground
+`BILLBOARD_WORLD` quad at the sprite's nearCell-resolved world position
+(`sprite_pos[spriteIndex-1]`), sized from the 4 shadow-corner verts, textured
+from the model poly (`texture_pages`/`texture_cluts` + page-relative UVs), dark
++ translucent — an approximation of the PSX shadowMatrix-projected subdivided
+quad (the `m*m` subdivision is lost). Verified by build-link + inspection.
+Deferred: the real in-game visual A/B vs `-renderer psyx` (user run). Full
+detail: `T5.2-sprite-sky-effects.md`.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

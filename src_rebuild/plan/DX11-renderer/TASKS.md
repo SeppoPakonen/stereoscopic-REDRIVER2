@@ -57,7 +57,7 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 - [x] **T4.5** Wire `-renderer gl` into the registry & build — [T4.5](T4.5-renderer-gl-registry-wiring.md)
 - [x] **T4.6** GL per-eye stereo + composite parity — [T4.6](T4.6-gl-stereo-composite-parity.md)
 - [x] **T5.1** In-game renderer integration (DrawCommand → per-eye → composite) — [T5.1](T5.1-in-game-renderer-integration.md)
-- [ ] **T5.2** Plot-function feed rewiring (game geometry → DrawCommand list) — [T5.2](T5.2-plot-function-feed-rewiring.md) *(terrain/tile core + DrawGame dx11 consumer + texture baking + in-game A/B verified + cars body/wheels + MODEL sprites/effects + sky + addPrim single-primitive effects submitted: [core](T5.2-terrain-tile-core.md), [consumer](T5.2-dx11-consumer-drawgame.md), [texture](T5.2-feed-texture-baking.md), [A/B](T5.2-ab-verify-in-game.md), [cars](T5.2-car-feed.md), [sprite/sky/effects](T5.2-sprite-sky-effects.md))*
+- [x] **T5.2** Plot-function feed rewiring (game geometry → DrawCommand list) — [T5.2](T5.2-plot-function-feed-rewiring.md) *(terrain/tile core + DrawGame dx11 consumer + texture baking + in-game A/B verified + cars body/wheels + MODEL sprites/effects + sky + addPrim single-primitive effects + sprite-shadows submitted: [core](T5.2-terrain-tile-core.md), [consumer](T5.2-dx11-consumer-drawgame.md), [texture](T5.2-feed-texture-baking.md), [A/B](T5.2-ab-verify-in-game.md), [cars](T5.2-car-feed.md), [sprite/sky/effects](T5.2-sprite-sky-effects.md))*
 
 ## Out of scope (for now)
 

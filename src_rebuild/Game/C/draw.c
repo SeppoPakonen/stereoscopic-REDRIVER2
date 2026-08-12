@@ -125,8 +125,48 @@ struct MVERTEX5x5
 	MVERTEX verts[5][5];
 };
 
+// T5.2 sprite-shadow feed: submit a ground billboard (BILLBOARD_WORLD) for one
+// sprite shadow poly under `-renderer dx11`. The PSX shadow is a shadowMatrix-
+// projected, m*m-subdivided quad; the feed approximates it by a single ground
+// quad at the sprite's world position, sized from the 4 shadow-corner verts,
+// textured from the model poly (texture_pages/clut + page-relative UVs), dark
+// + translucent. The legacy GTE path stays intact (called in parallel).
+void PlotFeed_SubmitSpriteShadow(POLYFT4* src, SVECTOR* verts, const VECTOR* worldPos, int z)
+{
+	int corners[4];
+	int cx = 0, cy = 0, bx = 1, by = 1, d, i;
+
+	corners[0] = src->v0;
+	corners[1] = src->v1;
+	corners[2] = src->v3;
+	corners[3] = src->v2;
+
+	for (i = 0; i < 4; i++)
+	{
+		cx += verts[corners[i]].vx;
+		cy += verts[corners[i]].vy;
+	}
+	cx /= 4; cy /= 4;
+
+	for (i = 0; i < 4; i++)
+	{
+		d = verts[corners[i]].vx - cx; if (d < 0) d = -d; if (d > bx) bx = d;
+		d = verts[corners[i]].vy - cy; if (d < 0) d = -d; if (d > by) by = d;
+	}
+
+	unsigned char bbuv[8] = { src->uv0.u, src->uv0.v,
+	                          src->uv1.u, src->uv1.v,
+	                          src->uv2.u, src->uv2.v,
+	                          src->uv3.u, src->uv3.v };
+
+	PlotFeed_SubmitBillboard(worldPos, BILLBOARD_WORLD, bx, by,
+	                         texture_pages[src->texture_set],
+	                         texture_cluts[src->texture_set][src->texture_id],
+	                         MATBLEND_TRANSLUCENT, bbuv, 0x404040, z >> 3);
+}
+
 // [D] [T] [A]
-void addSubdivSpriteShadow(POLYFT4* src, SVECTOR* verts, int z)
+void addSubdivSpriteShadow(POLYFT4* src, SVECTOR* verts, int z, const VECTOR* worldPos)
 {
 	int m;
 
@@ -164,6 +204,11 @@ void addSubdivSpriteShadow(POLYFT4* src, SVECTOR* verts, int z)
 	drawMesh((MVERTEX(*)[5][5])subdiVerts.verts, m, m, &plotContext);
 
 	plotContext.ot -= 28;
+
+#ifndef PSX
+	if (Renderer_IsDX11())
+		PlotFeed_SubmitSpriteShadow(src, verts, worldPos, z);
+#endif
 }
 
 // [D] [T] [A]
@@ -324,10 +369,10 @@ void DrawSprites(PACKED_CELL_OBJECT** sprites, int numFound)
 		{
 			gte_SetRotMatrix(&shadowMatrix);
 
-			addSubdivSpriteShadow(GET_MODEL_DATA(POLYFT4, model, poly_block), GET_MODEL_DATA(SVECTOR, model, vertices), z);
+			addSubdivSpriteShadow(GET_MODEL_DATA(POLYFT4, model, poly_block), GET_MODEL_DATA(SVECTOR, model, vertices), z, &sprite_pos[spriteIndex - 1]);
 
 			if (model->num_polys == 2)
-				addSubdivSpriteShadow(GET_MODEL_DATA(POLYFT4, model, poly_block) + 1, GET_MODEL_DATA(SVECTOR, model, vertices), z);
+				addSubdivSpriteShadow(GET_MODEL_DATA(POLYFT4, model, poly_block) + 1, GET_MODEL_DATA(SVECTOR, model, vertices), z, &sprite_pos[spriteIndex - 1]);
 
 			gte_SetRotMatrix(&face_camera);
 
