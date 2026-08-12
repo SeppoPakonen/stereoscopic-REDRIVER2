@@ -461,5 +461,30 @@ converter unit test (GT3 clut via civ_clut, FT3 raw clut, triangle indices,
 page-scaled UVs): `TOTAL_FAILS=0 GAMEFEED=PASS`. A real in-game visual A/B vs
 `-renderer psyx` is deferred to the user. Full detail: `T5.2-car-feed.md`.
 
+**Sprite / sky / effects feed (T5.2, MODEL-based):** the **MODEL-based**
+sprite/effect plot functions now submit world-space `DrawCommand`s under
+`-renderer dx11` (legacy GTE kept in parallel), reusing `PlotFeed_SubmitModel`:
+- **`DrawSprites`** (draw.c) — tree billboards. The billboard world rotation is
+  **`face_camera_work`** (camera.h; the legacy path pre-composites it as
+  `face_camera = inv_camera_matrix * face_camera_work` for the GTE). Sprite
+  positions are **packed relative to the cell origin** (like tiles), so a new
+  `sprite_pos[]` array (draw.h/draw.c, parallel to `spriteList`) is filled with
+  the nearCell-resolved world position in `DrawMapPSX`; `DrawSprites`'s dx11
+  branch submits `PlotFeed_SubmitModel(model, &face_camera_work,
+  &sprite_pos[i], z, PLOT_TRANSPARENT)`.
+- **`DrawThrownBombs`** (bomberman.c) — `PlotFeed_SubmitModel(gBombModel,
+  &object_matrix, &bomb->position, z, 0)`.
+- **`DrawSmashable_sprites`** (debris.c) — `PlotFeed_SubmitModel(model,
+  &object_matrix, &pos, z, 0)`.
+
+Camera depth `z` for the sort key is computed like `RenderModel` (dot
+`inv_camera_matrix` row 2 · `(worldpos − camera)`). Verified by build-link +
+inspection (renderer unchanged; the headless harness is unaffected). Still to
+do: the **sky** (`DrawSkyDome` — uses its own `skytpage`/`skyclut` VRAM tables +
+per-poly `skytexuv` UVs, needing a dedicated path) and the **addPrim
+single-primitive** effects (explosions, debris, smoke, rain, tyre tracks, sprite
+shadows — need a `mesh == NULL` + `material` renderer path). Full detail:
+`T5.2-sprite-sky-effects.md`.
+
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

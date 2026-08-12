@@ -91,6 +91,7 @@ SVECTOR night_colours[4] =
 void* model_object_ptrs[MAX_DRAWN_BUILDINGS];
 void* model_tile_ptrs[MAX_DRAWN_TILES];
 VECTOR model_tile_pos[MAX_DRAWN_TILES];
+VECTOR sprite_pos[MAX_DRAWN_SPRITES];
 void* anim_obj_buffer[MAX_DRAWN_ANIMATING];
 void* spriteList[MAX_DRAWN_SPRITES];
 
@@ -176,6 +177,7 @@ void DrawSprites(PACKED_CELL_OBJECT** sprites, int numFound)
 	PACKED_CELL_OBJECT* pco;
 	PACKED_CELL_OBJECT** list;
 	int numShadows;
+	int spriteIndex = 0;   // T5.2 feed: index into sprite_pos[] (parallel to sprites)
 
 #if 0 //def PSX
 	MVERTEX5x5& subdiVerts = *(MVERTEX5x5*)(u_char*)getScratchAddr(0);
@@ -249,6 +251,19 @@ void DrawSprites(PACKED_CELL_OBJECT** sprites, int numFound)
 		plotContext.scribble[2] = pco->pos.vz;
 
 		z = Apply_InvCameraMatrixAndSetMatrix((VECTOR_NOPAD*)plotContext.scribble, (MATRIX2*)&face_camera);
+
+#ifndef PSX
+		if (Renderer_IsDX11())
+		{
+			// T5.2 sprite feed: submit the billboard MODEL in world space
+			// (camera-facing face_camera_work rotation, nearCell-resolved pos).
+			int spz = FIXEDH(inv_camera_matrix.m[0][2] * (sprite_pos[spriteIndex].vx - camera_position.vx)
+			             + inv_camera_matrix.m[1][2] * (sprite_pos[spriteIndex].vy - camera_position.vy)
+			             + inv_camera_matrix.m[2][2] * (sprite_pos[spriteIndex].vz - camera_position.vz));
+			PlotFeed_SubmitModel(model, &face_camera_work, &sprite_pos[spriteIndex], spz, PLOT_TRANSPARENT);
+		}
+#endif
+		spriteIndex++;
 
 		if (z < 1000)
 		{
@@ -1494,7 +1509,14 @@ void DrawMapPSX(int* comp_val)
 						if (model->shape_flags & SHAPE_FLAG_SPRITE)
 						{
 							if (drawData.sprites_found < MAX_DRAWN_SPRITES)
+							{
+								// T5.2 feed: store the nearCell-resolved world position
+								// (ppco->pos is packed relative to the cell origin).
+								sprite_pos[drawData.sprites_found].vx = ci.nearCell.x + (short)(ppco->pos.vx - ci.nearCell.x);
+								sprite_pos[drawData.sprites_found].vy = (short)ppco->pos.vy >> 1;
+								sprite_pos[drawData.sprites_found].vz = ci.nearCell.z + (short)(ppco->pos.vz - ci.nearCell.z);
 								spriteList[drawData.sprites_found++] = ppco;
+							}
 
 							if ((model->flags2 & MODEL_FLAG_ANIMOBJ) && drawData.anim_objs_found < MAX_DRAWN_ANIMATING)
 							{

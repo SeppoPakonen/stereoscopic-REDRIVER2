@@ -82,6 +82,11 @@ extern void* model_tile_ptrs[MAX_DRAWN_TILES];
 // model_tile_ptrs, filled by DrawMapPSX and consumed by DrawTILES's dx11 feed.
 extern VECTOR model_tile_pos[MAX_DRAWN_TILES];
 
+// T5.2 feed: world-space position (nearCell-resolved) of each sprite in
+// spriteList, filled by DrawMapPSX and consumed by DrawSprites's dx11 feed
+// (ppco->pos is packed relative to the cell origin, like tiles).
+extern VECTOR sprite_pos[MAX_DRAWN_SPRITES];
+
 extern int units_across_halved;
 extern int units_down_halved;
 extern int pvs_square;

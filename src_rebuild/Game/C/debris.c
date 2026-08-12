@@ -15,6 +15,7 @@
 #include "map.h"
 #include "mission.h"
 #include "draw.h"
+#include "../render/renderer.h"
 #include "models.h"
 #include "players.h"
 #include "shadow.h"
@@ -1253,6 +1254,17 @@ void DrawSmashable_sprites(void)
 			pos.vx = dam->vx;
 			pos.vy = dam->cop.pos.vy;
 			pos.vz = dam->cop.pos.vz;
+
+#ifndef PSX
+			if (Renderer_IsDX11())
+			{
+				// T5.2 effect feed: submit the smashable MODEL in world space.
+				int z = FIXEDH(inv_camera_matrix.m[0][2] * (pos.vx - camera_position.vx)
+				             + inv_camera_matrix.m[1][2] * (pos.vy - camera_position.vy)
+				             + inv_camera_matrix.m[2][2] * (pos.vz - camera_position.vz));
+				PlotFeed_SubmitModel(model, &object_matrix, &pos, z, 0);
+			}
+#endif
 
 			SetFrustrumMatrix();
 

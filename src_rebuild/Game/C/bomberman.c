@@ -18,6 +18,7 @@
 #include "pedest.h"
 
 #include "ASM/rndrasm.h"
+#include "../render/renderer.h"
 
 MODEL* gBombModel;
 
@@ -77,6 +78,17 @@ void DrawThrownBombs(void)
 			pos.vx = bomb->position.vx;
 			pos.vy = bomb->position.vy;
 			pos.vz = bomb->position.vz;
+
+#ifndef PSX
+			if (Renderer_IsDX11())
+			{
+				// T5.2 effect feed: submit the bomb MODEL in world space.
+				int z = FIXEDH(inv_camera_matrix.m[0][2] * (pos.vx - camera_position.vx)
+				             + inv_camera_matrix.m[1][2] * (pos.vy - camera_position.vy)
+				             + inv_camera_matrix.m[2][2] * (pos.vz - camera_position.vz));
+				PlotFeed_SubmitModel(gBombModel, &object_matrix, &pos, z, 0);
+			}
+#endif
 
 			SetFrustrumMatrix();
 

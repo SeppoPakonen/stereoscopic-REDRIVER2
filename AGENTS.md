@@ -210,6 +210,17 @@ slice (T5.1) are **complete**:
   `PlotFeed_SubmitModel` path. Verified by build-link + a headless `CAR_FEED`
   converter unit test (`GAMEFEED=PASS`); in-game visual A/B deferred to the user.
   See `plan/DX11-renderer/T5.2-car-feed.md`.
+- **Sprite / effects feed (T5.2, MODEL-based)**: the **MODEL-based** sprite/
+  effect plot functions submit world-space `DrawCommand`s under `-renderer dx11`
+  (legacy GTE kept in parallel), reusing `PlotFeed_SubmitModel`:
+  `DrawSprites` (tree billboards — billboard world rotation `face_camera_work`,
+  positions nearCell-resolved into a new `sprite_pos[]` array because `ppco->pos`
+  is packed like tiles), `DrawThrownBombs` (bomberman.c), `DrawSmashable_sprites`
+  (debris.c). Verified by build-link + inspection (renderer unchanged). Still to
+  do: the **sky** (`DrawSkyDome` — dedicated `skytpage`/`skyclut`/`skytexuv`
+  path) and the **addPrim single-primitive** effects (explosions, debris, smoke,
+  rain, tyre tracks, sprite shadows — a `mesh == NULL` + `material` renderer
+  path). See `plan/DX11-renderer/T5.2-sprite-sky-effects.md`.
 - **DrawGame dx11 consumer (T5.2, A/B)**: the **consumer half** — `DrawGame`'s
   `-renderer dx11` branch now renders the arena to a **companion DX11 window**
   (`Dx11GameFeed_RenderFrame` → per-eye → MONO composite) **in parallel** with
@@ -241,11 +252,14 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 ## Next Steps for Future Development
 
-1. Finish the plot-function feed rewiring: sprites/sky/effects (DrawSprites/
-   DrawSkyDome/debris/weather). The terrain/tile feed (T5.2 core) + the DrawGame
-   dx11 consumer (A/B companion window) + real feed texture baking + the in-game
-   A/B verification + the car body/wheels feed are done; pitch/roll camera is
-   the immediate follow-up.
+1. Finish the plot-function feed rewiring: the sky (`DrawSkyDome` — dedicated
+   `skytpage`/`skyclut`/`skytexuv` path) and the addPrim single-primitive
+   effects (explosions, debris, smoke, rain, tyre tracks, sprite shadows — a
+   `mesh == NULL` + `material` renderer path). The terrain/tile feed (T5.2 core)
+   + the DrawGame dx11 consumer (A/B companion window) + real feed texture
+   baking + the in-game A/B verification + the car body/wheels feed + the
+   MODEL-based sprites/effects feed are done; pitch/roll camera is the immediate
+   follow-up.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
@@ -259,6 +273,6 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 **Status**: Phase 4 done (T4.1–T4.6) + T5.1 renderer integration + T5.2
 terrain/tile feed + DrawGame dx11 consumer (A/B) + in-game A/B verified
 (terrain feed renders in the companion window) + car body/wheels feed
-(CAR_MODEL + civ_clut, headless CAR_FEED test PASS); launcher + stereo GUI
-working, DX11 + modern GL backends selectable, mono/per-eye/stereo-composite
-A/B-verified
+(CAR_MODEL + civ_clut, headless CAR_FEED test PASS) + MODEL-based sprites/
+effects feed; launcher + stereo GUI working, DX11 + modern GL backends
+selectable, mono/per-eye/stereo-composite A/B-verified
