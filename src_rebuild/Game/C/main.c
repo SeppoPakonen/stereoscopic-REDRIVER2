@@ -1758,6 +1758,15 @@ static void Dx11Game_RenderFrame(void)
 	float proj[4][4];
 	Dx11Game_MatPerspectiveRH(fovV, 320.0f / 240.0f, 1.0f, 200000.0f, proj);
 
+	// Sky texture tables (game's sky.c): the horizon MODEL's polys are textured
+	// per-poly from these via HorizonTextures[horizOffset + polyIndex].
+	Dx11SkyTextures skyTex = {
+		(const unsigned short*)skytpage,
+		(const unsigned short*)skyclut,
+		(const Dx11SkyUV*)skytexuv,
+		HorizonTextures,
+	};
+
 	Dx11GameFeed_RenderFrame(g_dx11GameDisplay.ren, g_dx11GameDisplay.res,
 	                         g_dx11GameDisplay.tex, g_dx11GameDisplay.sh,
 	                         g_dx11GameDisplay.cmds, g_dx11GameDisplay.comp,
@@ -1766,6 +1775,7 @@ static void Dx11Game_RenderFrame(void)
 	                         DX11C_MODE_MONO, NULL /*texUser*/,
 	                         Dx11Game_TexResolve, texture_pages /*tpages*/,
 	                         civ_clut /*car body civ_clut table*/,
+	                         &skyTex /*sky texture tables*/,
 	                         NULL /*bmpOut*/,
 	                         NULL /*customView*/);
 }

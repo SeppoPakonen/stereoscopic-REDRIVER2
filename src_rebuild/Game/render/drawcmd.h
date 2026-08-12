@@ -82,6 +82,13 @@ typedef struct {
     // by material/state.
     int sortKey;
 
+    // Sky horizon model: when set (mesh != NULL), the mesh's polys are textured
+    // from the game's sky tables (skytpage/skyclut/skytexuv via HorizonTextures),
+    // NOT the model's texture_set/texture_id — the sky path overrides both.
+    // `horizOffset` is the HorizonLookup[GameLevel][i] offset into HorizonTextures.
+    unsigned char skyModel;
+    short horizOffset;
+
     // Render hints (DrawCommandFlags).
     unsigned char flags;
 

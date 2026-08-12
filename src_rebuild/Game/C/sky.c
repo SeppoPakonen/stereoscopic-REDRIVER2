@@ -9,6 +9,11 @@
 #include "debris.h"
 #include "players.h"
 #include "draw.h"
+#include "../render/renderer.h"
+#include "../render/drawcmd.h"
+
+// T5.2 sky feed helper (defined at the end of this file).
+void PlotFeed_SubmitSkyModel(MODEL* model, int horizOffset);
 
 struct RGB16
 {
@@ -983,7 +988,46 @@ void DrawSkyDome(void)
 	PlotHorizonMDL(modelpointers[2], HorizonLookup[GameLevel][1], &skycolor);
 	PlotHorizonMDL(modelpointers[3], HorizonLookup[GameLevel][2], &skycolor);
 	PlotHorizonMDL(modelpointers[1], HorizonLookup[GameLevel][3], &skycolor);
+
+	if (Renderer_IsDX11())
+	{
+		// T5.2 sky feed: submit the 4 horizon MODELS as world-space DrawCommands
+		// (camera-anchored; the renderer textures their polys from the sky tables
+		// via HorizonTextures). Legacy GTE path kept in parallel.
+		PlotFeed_SubmitSkyModel(modelpointers[0], HorizonLookup[GameLevel][0]);
+		PlotFeed_SubmitSkyModel(modelpointers[2], HorizonLookup[GameLevel][1]);
+		PlotFeed_SubmitSkyModel(modelpointers[3], HorizonLookup[GameLevel][2]);
+		PlotFeed_SubmitSkyModel(modelpointers[1], HorizonLookup[GameLevel][3]);
+	}
 #endif
 
+}
+
+// T5.2 sky feed: build + submit a world-space DrawCommand for a horizon MODEL
+// under `-renderer dx11`. The sky is camera-anchored (world pos = camera +
+// sky_y_offset, identity rotation) and its polys are textured from the sky
+// tables (skytpage/skyclut/skytexuv via HorizonTextures), selected by
+// `horizOffset`. The legacy GTE path is untouched (called in parallel).
+void PlotFeed_SubmitSkyModel(MODEL* model, int horizOffset)
+{
+	DrawCommand cmd;
+	memset(&cmd, 0, sizeof(cmd));
+
+	cmd.mesh = model;
+	cmd.skyModel = 1;
+	cmd.horizOffset = (short)horizOffset;
+
+	InitMatrix(cmd.world);
+	cmd.world.t[0] = camera_position.vx;
+	cmd.world.t[1] = camera_position.vy + sky_y_offset[GameLevel];
+	cmd.world.t[2] = camera_position.vz;
+
+	cmd.sortKey = 0;
+	cmd.flags = DRAWCMD_OPAQUE | DRAWCMD_TWOSIDED | DRAWCMD_FLAT;
+
+	cmd.palette = -1;
+	cmd.subdiv = -1;
+
+	DrawCmd_Submit(&cmd);
 }
 

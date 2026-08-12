@@ -45,6 +45,32 @@ int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flat
                              int *outVerts, int *outPolys,
                              const unsigned short *tpages);
 
+// ---------------------------------------------------------------------------
+// Sky horizon feed (T5.2): the sky horizon MODEL's polys are textured per-poly
+// from the game's sky tables (skytpage/skyclut/skytexuv) via
+// HorizonTextures[horizOffset + polyIndex], NOT the model's texture_set/id.
+// ---------------------------------------------------------------------------
+typedef struct {
+    unsigned char u0, v0, u1, v1, u2, v2, u3, v3;   // page-relative texel UVs
+} Dx11SkyUV;
+
+typedef struct {
+    const unsigned short *skytpage;        // [28] VRAM tpage per sky texture
+    const unsigned short *skyclut;         // [28] VRAM clut per sky texture
+    const Dx11SkyUV       *skytexuv;       // [28] UVs per sky texture
+    const unsigned char  *horizonTextures; // [40] horizon poly -> sky texture idx
+} Dx11SkyTextures;
+
+// Convert a game sky horizon MODEL into the adapter's raw mesh, texturing each
+// poly from the sky tables (via HorizonTextures[horizOffset + polyIndex]) — the
+// per-poly carTpage/carClut direct-bake path with the skytexuv UV remap
+// (u2,u3,u0,u1, matching PlotSkyPoly). `verts`/`polys` are caller buffers
+// (>= model->num_vertices / model->num_polys). Returns 0 on success.
+int Dx11GameFeed_SkyModelToMesh(const struct MODEL *model, const Dx11SkyTextures *sky,
+                                int horizOffset, Dx11ModelVertex *verts, int vertCap,
+                                Dx11ModelPoly *polys, int polyCap,
+                                int *outVerts, int *outPolys);
+
 // Convert a game CAR_MODEL (dented vlist + GT3/FT3/B3 triangle lists) into the
 // adapter's raw mesh. `carModel` is the game's CAR_MODEL* (passed via
 // DrawCommand.carModel); `verts` is a caller buffer >= 256; `polys` >=
@@ -77,6 +103,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              void *texUser, Dx11ModelTexResolve texResolve,
                              const unsigned short *tpages,
                              const u_short (*civClut)[32][6],
+                             const Dx11SkyTextures *skyTex,
                              const char *bmpOut,
                              const float (*customView)[4]);
 

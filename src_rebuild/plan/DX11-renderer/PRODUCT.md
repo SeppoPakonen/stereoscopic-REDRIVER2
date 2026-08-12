@@ -479,12 +479,28 @@ sprite/effect plot functions now submit world-space `DrawCommand`s under
 
 Camera depth `z` for the sort key is computed like `RenderModel` (dot
 `inv_camera_matrix` row 2 · `(worldpos − camera)`). Verified by build-link +
-inspection (renderer unchanged; the headless harness is unaffected). Still to
-do: the **sky** (`DrawSkyDome` — uses its own `skytpage`/`skyclut` VRAM tables +
-per-poly `skytexuv` UVs, needing a dedicated path) and the **addPrim
-single-primitive** effects (explosions, debris, smoke, rain, tyre tracks, sprite
-shadows — need a `mesh == NULL` + `material` renderer path). Full detail:
-`T5.2-sprite-sky-effects.md`.
+inspection (renderer unchanged; the headless harness is unaffected). Full
+detail: `T5.2-sprite-sky-effects.md`.
+
+**Sky feed (T5.2):** `DrawSkyDome`'s 4 horizon MODELS submit world-space
+`DrawCommand`s under `-renderer dx11` via a **dedicated sky texture path** — the
+horizon MODEL's polys are textured **per-poly from the game's sky tables**, NOT
+the model's `texture_set`/`texture_id`/UVs (which `PlotSkyPoly` overrides):
+- **`DrawCommand.skyModel`** + **`horizOffset`** (drawcmd.h) mark a sky horizon
+  command; `PlotFeed_SubmitSkyModel` (sky.c) builds it camera-anchored (world pos
+  = `camera_position + (0, sky_y_offset[GameLevel], 0)`, identity rotation).
+- **`Dx11SkyTextures`** (dx11_gamefeed.h) bundles the game's
+  `skytpage`/`skyclut`/`skytexuv`/`HorizonTextures`; `main.c` passes `&skyTex`.
+- **`Dx11GameFeed_SkyModelToMesh`** (dx11_gamefeed.c) converts each horizon poly:
+  `skytexnum = HorizonTextures[horizOffset + polyIndex]`, sets the poly's
+  `carTpage`/`carClut` (the direct-bake car path) to `skytpage`/`skyclut[skytexnum]`
+  + the `skytexuv[skytexnum]` UVs (remapped `u2,u3,u0,u1`, matching `PlotSkyPoly`).
+
+Verified by build-link + a headless `SKY_FEED` converter unit test (sky texture
+via HorizonTextures + carTpage/carClut + UV remap): `TOTAL_FAILS=0 GAMEFEED=PASS`.
+Still to do: the **addPrim single-primitive** effects (explosions, debris, smoke,
+rain, tyre tracks, sprite shadows — need a `mesh == NULL` + `material` renderer
+path). Full detail: `T5.2-sprite-sky-effects.md`.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

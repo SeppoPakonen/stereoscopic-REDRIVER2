@@ -216,11 +216,20 @@ slice (T5.1) are **complete**:
   `DrawSprites` (tree billboards — billboard world rotation `face_camera_work`,
   positions nearCell-resolved into a new `sprite_pos[]` array because `ppco->pos`
   is packed like tiles), `DrawThrownBombs` (bomberman.c), `DrawSmashable_sprites`
-  (debris.c). Verified by build-link + inspection (renderer unchanged). Still to
-  do: the **sky** (`DrawSkyDome` — dedicated `skytpage`/`skyclut`/`skytexuv`
-  path) and the **addPrim single-primitive** effects (explosions, debris, smoke,
-  rain, tyre tracks, sprite shadows — a `mesh == NULL` + `material` renderer
-  path). See `plan/DX11-renderer/T5.2-sprite-sky-effects.md`.
+  (debris.c). Verified by build-link + inspection (renderer unchanged).
+- **Sky feed (T5.2)**: `DrawSkyDome`'s 4 horizon MODELS submit world-space
+  `DrawCommand`s under `-renderer dx11` via a **dedicated sky texture path** —
+  the horizon MODEL's polys are textured per-poly from the game's
+  `skytpage`/`skyclut`/`skytexuv` via `HorizonTextures[horizOffset + polyIndex]`
+  (NOT the model's texture_set/id/UVs, which `PlotSkyPoly` overrides).
+  `DrawCommand.skyModel`/`horizOffset` + `PlotFeed_SubmitSkyModel` (sky.c,
+  camera-anchored); `Dx11SkyTextures` (bundles the sky tables) +
+  `Dx11GameFeed_SkyModelToMesh` (dx11_gamefeed.c, per-poly carTpage/carClut
+  direct-bake + u2,u3,u0,u1 UV remap); `main.c` passes `&skyTex`. Verified by
+  build-link + a headless `SKY_FEED` converter unit test (`GAMEFEED=PASS`).
+  Still to do: the **addPrim single-primitive** effects (explosions, debris,
+  smoke, rain, tyre tracks, sprite shadows — a `mesh == NULL` + `material`
+  renderer path). See `plan/DX11-renderer/T5.2-sprite-sky-effects.md`.
 - **DrawGame dx11 consumer (T5.2, A/B)**: the **consumer half** — `DrawGame`'s
   `-renderer dx11` branch now renders the arena to a **companion DX11 window**
   (`Dx11GameFeed_RenderFrame` → per-eye → MONO composite) **in parallel** with
@@ -252,14 +261,13 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 ## Next Steps for Future Development
 
-1. Finish the plot-function feed rewiring: the sky (`DrawSkyDome` — dedicated
-   `skytpage`/`skyclut`/`skytexuv` path) and the addPrim single-primitive
-   effects (explosions, debris, smoke, rain, tyre tracks, sprite shadows — a
+1. Finish the plot-function feed rewiring: the addPrim single-primitive effects
+   (explosions, debris, smoke, rain, tyre tracks, sprite shadows — a
    `mesh == NULL` + `material` renderer path). The terrain/tile feed (T5.2 core)
    + the DrawGame dx11 consumer (A/B companion window) + real feed texture
    baking + the in-game A/B verification + the car body/wheels feed + the
-   MODEL-based sprites/effects feed are done; pitch/roll camera is the immediate
-   follow-up.
+   MODEL-based sprites/effects feed + the sky feed are done; pitch/roll camera
+   is the immediate follow-up.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
@@ -274,5 +282,6 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 terrain/tile feed + DrawGame dx11 consumer (A/B) + in-game A/B verified
 (terrain feed renders in the companion window) + car body/wheels feed
 (CAR_MODEL + civ_clut, headless CAR_FEED test PASS) + MODEL-based sprites/
-effects feed; launcher + stereo GUI working, DX11 + modern GL backends
-selectable, mono/per-eye/stereo-composite A/B-verified
+effects feed + sky feed (skytpage/skyclut/skytexuv, headless SKY_FEED test
+PASS); launcher + stereo GUI working, DX11 + modern GL backends selectable,
+mono/per-eye/stereo-composite A/B-verified

@@ -1,6 +1,13 @@
 #ifndef SKY_H
 #define SKY_H
 
+#include "engine/tset.h"   // struct UV
+
+extern unsigned char HorizonTextures[40];
+extern struct UV skytexuv[28];
+extern short skyclut[28];
+extern short skytpage[28];
+
 extern SVECTOR sun_position[4];
 extern SVECTOR moon_position[4];
 

@@ -256,6 +256,76 @@ int Dx11GameFeed_CarModelToMesh(const void* carModel, int palette,
 }
 
 // ---------------------------------------------------------------------------
+// Sky horizon MODEL -> adapter raw mesh (sky textures via HorizonTextures).
+// ---------------------------------------------------------------------------
+// The sky horizon MODEL's polys are textured per-poly from the game's sky
+// tables: skytexnum = HorizonTextures[horizOffset + polyIndex], and the poly
+// uses skytpage/skyclut[skytexnum] + skytexuv[skytexnum] UVs (remapped
+// u2,u3,u0,u1, matching PlotSkyPoly). Uses the per-poly carTpage/carClut
+// direct-bake path so the adapter bakes the sky page region from VRAM.
+int Dx11GameFeed_SkyModelToMesh(const struct MODEL* model, const Dx11SkyTextures* sky,
+                                int horizOffset, Dx11ModelVertex* verts, int vertCap,
+                                Dx11ModelPoly* polys, int polyCap,
+                                int* outVerts, int* outPolys) {
+    if (!model || !sky) return 1;
+    int ov = 0, op = 0;
+
+    const SVECTOR* srcVerts = (const SVECTOR*)((const unsigned char*)model + model->vertices);
+    int nv = model->num_vertices;
+    if (nv > vertCap) nv = vertCap;
+    for (int i = 0; i < nv; ++i) {
+        verts[i].x = srcVerts[i].vx;
+        verts[i].y = srcVerts[i].vy;
+        verts[i].z = srcVerts[i].vz;
+        verts[i].r = verts[i].g = verts[i].b = 0;
+    }
+    ov = nv;
+
+    const unsigned char* p = (const unsigned char*)model + model->poly_block;
+    int n = model->num_polys;
+    int idx = 0;   // poly index into HorizonTextures (advances for every poly)
+    while (n > 0) {
+        const PL_POLYFT4* poly = (const PL_POLYFT4*)p;
+        int ptype = poly->id & 31;
+        if (IS_FLAT_QUAD(ptype)) {
+            if (op < polyCap) {
+                int skytexnum = sky->horizonTextures[horizOffset + idx];
+                int tpage = sky->skytpage[skytexnum];
+                int fmt = (tpage >> 7) & 3;
+                int pageW = (fmt == 0) ? 64 : (fmt == 1) ? 128 : 256;
+                const Dx11SkyUV* uv = &sky->skytexuv[skytexnum];
+                Dx11ModelPoly* mp = &polys[op];
+                memset(mp, 0, sizeof(*mp));
+                // Game winding (vi0,vi1,vi3,vi2) = (v0,v1,v3,v2); UV remap u2,u3,u0,u1.
+                mp->vi0 = poly->v0; mp->vi1 = poly->v1;
+                mp->vi3 = poly->v3; mp->vi2 = poly->v2;
+                mp->u0 = (unsigned char)((uv->u2 * pageW) >> 8); mp->v0 = uv->v2;
+                mp->u1 = (unsigned char)((uv->u3 * pageW) >> 8); mp->v1 = uv->v3;
+                mp->u3 = (unsigned char)((uv->u0 * pageW) >> 8); mp->v3 = uv->v0;
+                mp->u2 = (unsigned char)((uv->u1 * pageW) >> 8); mp->v2 = uv->v1;
+                mp->r = mp->g = mp->b = 255;
+                mp->shade = DX11SH_COLOR_FLAT;
+                mp->blend = DX11SH_BLEND_NONE;
+                mp->twoSided = 1;
+                mp->carTexture = 1;
+                mp->carTpage = (unsigned short)tpage;
+                mp->carClut = (unsigned short)sky->skyclut[skytexnum];
+                ++op;
+            }
+        }
+        int stride = kPolySizes[ptype];
+        if (stride <= 0) stride = 16;
+        p += stride;
+        --n;
+        ++idx;
+    }
+
+    if (outVerts) *outVerts = ov;
+    if (outPolys) *outPolys = op;
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // MATRIX (int16 rot /4096, int32 trans) -> float row-vector world[4][4].
 // ---------------------------------------------------------------------------
 static void MatWorldFromGte(const MATRIX *m, float world[4][4]) {
@@ -296,6 +366,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              void *texUser, Dx11ModelTexResolve texResolve,
                              const unsigned short *tpages,
                              const u_short (*civClut)[32][6],
+                             const Dx11SkyTextures *skyTex,
                              const char *bmpOut,
                              const float (*customView)[4]) {
     ID3D11DeviceContext *ctx = Dx11Renderer_GetContext(ren);
@@ -331,7 +402,16 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
             Dx11ModelVertex *verts = NULL;
             Dx11ModelPoly *mpolys = NULL;
             int ov = 0, op = 0;
-            if (dc->carModel) {
+            if (dc->skyModel && dc->mesh) {
+                // Sky horizon model: texture each poly from the sky tables
+                // (skytpage/skyclut/skytexuv via HorizonTextures).
+                int nv = dc->mesh->num_vertices, np = dc->mesh->num_polys;
+                verts = (Dx11ModelVertex *)malloc((size_t)nv * sizeof(Dx11ModelVertex));
+                mpolys = (Dx11ModelPoly *)malloc((size_t)np * sizeof(Dx11ModelPoly));
+                if (!verts || !mpolys) { free(mpolys); free(verts); return 1; }
+                Dx11GameFeed_SkyModelToMesh(dc->mesh, skyTex, dc->horizOffset,
+                                            verts, nv, mpolys, np, &ov, &op);
+            } else if (dc->carModel) {
                 // Car body: convert the CAR_MODEL (GT3/FT3/B3 triangles + dented
                 // vlist) via the car mesh path; palette picks the civ_clut color.
                 const GFCarModel *car = (const GFCarModel *)dc->carModel;

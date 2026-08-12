@@ -171,6 +171,44 @@ static void TestCarModelConverter(FILE* resf, int* fails) {
     if (!okFT3) ++(*fails);
 }
 
+// Focused unit test for the T5.2 sky converter (Dx11GameFeed_SkyModelToMesh):
+// verifies it textures a horizon MODEL's poly from the sky tables
+// (skytpage/skyclut/skytexuv via HorizonTextures[horizOffset]) with the
+// u2,u3,u0,u1 UV remap and the per-poly carTpage/carClut direct-bake path.
+static void TestSkyModelConverter(FILE* resf, int* fails) {
+    const short mkV[4][3] = { { 0,0,0 }, { 1,0,0 }, { 1,1,0 }, { 0,1,0 } };
+    QuadModel m = MakeQuadModel(mkV);
+
+    unsigned short skytpage[28] = { 0 };
+    unsigned short skyclut[28] = { 0 };
+    Dx11SkyUV skytexuv[28];
+    memset(skytexuv, 0, sizeof(skytexuv));
+    unsigned char horizonTex[40] = { 0 };
+    horizonTex[0] = 2;          // poly 0 -> sky texture 2
+    skytpage[2] = 0x2000;       // fmt 0 -> pageW 64
+    skyclut[2] = 0x1234;
+    skytexuv[2] = (Dx11SkyUV){ 0,0, 128,0, 0,84, 128,84 };   // u0=0,v0=0 | u1=128,v1=0 | u2=0,v2=84 | u3=128,v3=84
+
+    Dx11SkyTextures sky = { skytpage, skyclut, skytexuv, horizonTex };
+
+    Dx11ModelVertex verts[8];
+    Dx11ModelPoly polys[4];
+    int ov = 0, op = 0;
+    int rc = Dx11GameFeed_SkyModelToMesh(&m.mdl, &sky, 0, verts, 8, polys, 4, &ov, &op);
+
+    // pageW=64: u0=(0*64)>>8=0, u1=(128*64)>>8=32, u3=0, u2=32; v via remap.
+    // Winding: vi0=0, vi1=1, vi3=2, vi2=3 (poly v0=0,v1=1,v3=2,v2=3).
+    int ok = (rc == 0 && op == 1
+              && polys[0].carTexture && polys[0].carTpage == 0x2000 && polys[0].carClut == 0x1234
+              && polys[0].vi0 == 0 && polys[0].vi1 == 1 && polys[0].vi3 == 2 && polys[0].vi2 == 3
+              && polys[0].u0 == 0 && polys[0].v0 == 84
+              && polys[0].u1 == 32 && polys[0].v1 == 84
+              && polys[0].u3 == 0 && polys[0].v3 == 0
+              && polys[0].u2 == 32 && polys[0].v2 == 0);
+    fprintf(resf, "SKY_FEED verts=%d polys=%d %s\n", ov, op, ok ? "PASS" : "FAIL");
+    if (!ok) ++(*fails);
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11RendererConfig rcfg = { 640, 240, 320, 240, 0, 0 };   // window 2x for SBS
     Dx11RendererResult rr;
@@ -216,12 +254,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     // T5.2 car body converter unit test (no renderer needed).
     TestCarModelConverter(resf, &fails);
+    // T5.2 sky horizon converter unit test (no renderer needed).
+    TestSkyModelConverter(resf, &fails);
 
     // SBS composite: left half = eye0, right half = eye1.
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_SBS, NULL, TexResolve_Untextured,
-                             NULL /*tpages*/, NULL /*civClut*/,
+                             NULL /*tpages*/, NULL /*civClut*/, NULL /*skyTex*/,
                              "dx11_gamefeed.bmp", NULL /*customView*/);
 
     int iw = 320, cy = 120;
@@ -256,7 +296,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_MONO, NULL, TexResolve_Untextured,
-                             NULL /*tpages*/, NULL /*civClut*/,
+                             NULL /*tpages*/, NULL /*civClut*/, NULL /*skyTex*/,
                              "dx11_gamefeed_mono.bmp", NULL /*customView*/);
     int okMonoMap = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * mapCol, 120, &r, &g, &b) == 0 && IsGreen(r, g, b));
     int okMonoCar = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * carCol, 120, &r, &g, &b) == 0 && IsRed(r, g, b));
