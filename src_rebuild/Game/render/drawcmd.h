@@ -55,10 +55,18 @@ typedef enum {
     DRAWCMD_NODEPTH     = 0x08, // skip depth test/write (overlays, sprites)
 } DrawCommandFlags;
 
+struct CAR_MODEL;   // game car body mesh (dr2types.h); opaque to the feed
+
 typedef struct {
     // Geometry source: a MODEL mesh (world-space vertices + polys). When NULL,
     // the command is a single-primitive using `material` (sprite/tile/overlay).
     struct MODEL *mesh;
+
+    // Car body: when set (mesh == NULL), the geometry is a game CAR_MODEL
+    // (triangulated, dented verts) placed at `world`; `palette` selects the
+    // civ_clut color variant. The renderer converts it via a CAR_MODEL mesh
+    // path (GT3/FT3/B3 triangles + per-poly civ_clut/tpage textures).
+    struct CAR_MODEL *carModel;
 
     // World transform (3x3 rotation + translation) placing the mesh in world
     // space. For single-primitives this carries the (x,y,z) placement.

@@ -1249,6 +1249,39 @@ void PlotFeed_SubmitModel(MODEL* model, const MATRIX* worldRot, const VECTOR* wo
 	DrawCmd_Submit(&cmd);
 }
 
+// T5.2 car feed: build + submit a world-space DrawCommand for a CAR_MODEL car
+// body under `-renderer dx11`. Mirrors the OT depth bucket (z>>1); `palette`
+// selects the civ_clut color variant the renderer uses to resolve each GT3
+// poly's CLUT. The legacy GTE path is untouched (called in parallel).
+void PlotFeed_SubmitCarModel(CAR_MODEL* model, int palette, const MATRIX* worldRot, const VECTOR* worldPos, int z)
+{
+	DrawCommand cmd;
+	memset(&cmd, 0, sizeof(cmd));
+
+	cmd.carModel = model;
+	cmd.mesh = NULL;
+
+	if (worldRot)
+		cmd.world = *worldRot;
+	else
+		InitMatrix(cmd.world);
+
+	if (worldPos)
+	{
+		cmd.world.t[0] = worldPos->vx;
+		cmd.world.t[1] = worldPos->vy;
+		cmd.world.t[2] = worldPos->vz;
+	}
+
+	cmd.sortKey = z >> 1;
+	cmd.flags = DRAWCMD_OPAQUE | DRAWCMD_TWOSIDED | DRAWCMD_FLAT;
+
+	cmd.palette = (short)palette;
+	cmd.subdiv = -1;
+
+	DrawCmd_Submit(&cmd);
+}
+
 // [D] [T]
 void RenderModel(MODEL* model, MATRIX* matrix, VECTOR* pos, int zBias, int flags, int subdiv, int nrot)
 {

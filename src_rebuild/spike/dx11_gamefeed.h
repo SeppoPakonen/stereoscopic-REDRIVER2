@@ -45,6 +45,18 @@ int Dx11GameFeed_ModelToMesh(const struct MODEL *model, const unsigned char flat
                              int *outVerts, int *outPolys,
                              const unsigned short *tpages);
 
+// Convert a game CAR_MODEL (dented vlist + GT3/FT3/B3 triangle lists) into the
+// adapter's raw mesh. `carModel` is the game's CAR_MODEL* (passed via
+// DrawCommand.carModel); `verts` is a caller buffer >= 256; `polys` >=
+// car->numGT3+numFT3+numB3. `palette` selects the civ_clut color variant;
+// `civClut` is the game's civ_clut[8][32][6] (NULL -> GT3 polys untextured).
+// Returns 0 on success.
+int Dx11GameFeed_CarModelToMesh(const void *carModel, int palette,
+                                const u_short (*civClut)[32][6],
+                                Dx11ModelVertex *verts, int vertCap,
+                                Dx11ModelPoly *polys, int polyCap,
+                                int *outVerts, int *outPolys);
+
 // Render a DrawCommand[] list through the full DX11 path: for each command with a
 // mesh, convert + submit via Dx11ModelAdapter, then render both eyes into their
 // offscreen RTs and composite SBS/TB/MONO into the backbuffer, captured to BMP.
@@ -64,6 +76,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                              int swap, Dx11CompositeMode mode,
                              void *texUser, Dx11ModelTexResolve texResolve,
                              const unsigned short *tpages,
+                             const u_short (*civClut)[32][6],
                              const char *bmpOut,
                              const float (*customView)[4]);
 

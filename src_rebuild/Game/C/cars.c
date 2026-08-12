@@ -19,6 +19,8 @@
 #include "convert.h"
 #include "glaunch.h"
 #include "ASM/rndrasm.h"
+#include "../render/renderer.h"
+#include "../render/drawcmd.h"
 
 struct plotCarGlobals
 {
@@ -819,6 +821,32 @@ void DrawCarWheels(CAR_DATA *cp, MATRIX *RearMatrix, VECTOR *pos, int zclip)
 		sWheelPos.vz = -wheelDisp->vz;
 		sWheelPos.vy = (-wheelSize - wheelDisp->vy) - wheel->susCompression + 14;
 
+#ifndef PSX
+		if (Renderer_IsDX11())
+		{
+			// T5.2 car feed: submit the wheel MODEL in world space (car rot +
+			// steer for the front wheels, placed at rot*sWheelPos + car pos).
+			MATRIX worldWheelRot;
+			const MATRIX* useRot = &cp->hd.drawCarMat;
+			if ((wheelnum & 1) == 0)
+			{
+				MulMatrix0(&cp->hd.drawCarMat, &SteerMatrix, &worldWheelRot);
+				useRot = &worldWheelRot;
+			}
+			VECTOR wpos;
+			wpos.vx = cp->hd.where.t[0];
+			wpos.vy = -cp->hd.where.t[1];
+			wpos.vz = cp->hd.where.t[2];
+			wpos.vx += FIXEDH(useRot->m[0][0] * sWheelPos.vx + useRot->m[0][1] * sWheelPos.vy + useRot->m[0][2] * sWheelPos.vz);
+			wpos.vy += FIXEDH(useRot->m[1][0] * sWheelPos.vx + useRot->m[1][1] * sWheelPos.vy + useRot->m[1][2] * sWheelPos.vz);
+			wpos.vz += FIXEDH(useRot->m[2][0] * sWheelPos.vx + useRot->m[2][1] * sWheelPos.vy + useRot->m[2][2] * sWheelPos.vz);
+			int wz = FIXEDH(inv_camera_matrix.m[0][2] * (wpos.vx - camera_position.vx)
+			              + inv_camera_matrix.m[1][2] * (wpos.vy - camera_position.vy)
+			              + inv_camera_matrix.m[2][2] * (wpos.vz - camera_position.vz));
+			PlotFeed_SubmitModel(model, useRot, &wpos, wz, TransparentObject ? PLOT_TRANSPARENT : 0);
+		}
+#endif
+
 		gte_SetRotMatrix(RearMatrix);
 		gte_ldv0(&sWheelPos);
 
@@ -1442,6 +1470,24 @@ void DrawCar(CAR_DATA* cp, int view)
 	pos.vz = cp->hd.where.t[2];
 	pos.vy = -cp->hd.where.t[1];
 
+	// T5.2 car feed: capture the WORLD position (with the car's cog offset,
+	// matching DrawCarObject's gte_rtv0tr) before the GTE path converts pos to
+	// camera space in place below. The feed submits body + wheels in world space.
+	VECTOR worldPos = pos;
+	{
+		SVECTOR cog = cp->ap.carCos->cog;
+		if (ActiveCheats.cheat13 != 0)
+		{
+			cog.vx <<= 1;
+			cog.vy <<= 1;
+			cog.vz <<= 1;
+		}
+		const MATRIX* cm = &cp->hd.drawCarMat;
+		worldPos.vx += FIXEDH(cm->m[0][0] * cog.vx + cm->m[0][1] * cog.vy + cm->m[0][2] * cog.vz);
+		worldPos.vy += FIXEDH(cm->m[1][0] * cog.vx + cm->m[1][1] * cog.vy + cm->m[1][2] * cog.vz);
+		worldPos.vz += FIXEDH(cm->m[2][0] * cog.vx + cm->m[2][1] * cog.vy + cm->m[2][2] * cog.vz);
+	}
+
 	SetFrustrumMatrix();
 
 	if (FrustrumCheck(&pos, 800) == -1)
@@ -1584,6 +1630,18 @@ void DrawCar(CAR_DATA* cp, int view)
 		CarModelPtr->vlist = gTempCarVertDump[cp->id];
 		CarModelPtr->nlist = gTempCarVertDump[cp->id];
 
+#ifndef PSX
+		if (Renderer_IsDX11())
+		{
+			// T5.2 car feed: submit the body CAR_MODEL in world space (dented
+			// vlist, civ_clut palette). Legacy GTE path kept in parallel.
+			int z = FIXEDH(inv_camera_matrix.m[0][2] * (worldPos.vx - camera_position.vx)
+			             + inv_camera_matrix.m[1][2] * (worldPos.vy - camera_position.vy)
+			             + inv_camera_matrix.m[2][2] * (worldPos.vz - camera_position.vz));
+			PlotFeed_SubmitCarModel(CarModelPtr, cp->ap.palette, &cp->hd.drawCarMat, &worldPos, z);
+		}
+#endif
+
 		FindCarLightFade(&workmatrix);
 
 		DrawCarObject(CarModelPtr, &workmatrix, &pos, cp->ap.palette, cp, 1);
@@ -1601,6 +1659,17 @@ void DrawCar(CAR_DATA* cp, int view)
 		CarModelPtr->nlist = gTempCarVertDump[cp->id];
 
 		gTempCarUVPtr = gTempLDCarUVDump[cp->id];
+
+#ifndef PSX
+		if (Renderer_IsDX11())
+		{
+			// T5.2 car feed: low-LOD body in world space (no wheels at this LOD).
+			int z = FIXEDH(inv_camera_matrix.m[0][2] * (worldPos.vx - camera_position.vx)
+			             + inv_camera_matrix.m[1][2] * (worldPos.vy - camera_position.vy)
+			             + inv_camera_matrix.m[2][2] * (worldPos.vz - camera_position.vz));
+			PlotFeed_SubmitCarModel(CarModelPtr, cp->ap.palette, &cp->hd.drawCarMat, &worldPos, z);
+		}
+#endif
 
 		if (pos.vz < 8000)
 		{

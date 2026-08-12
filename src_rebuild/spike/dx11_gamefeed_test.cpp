@@ -106,6 +106,71 @@ static int ProbeBMPPixel(const char *path, int x, int y, int *r, int *g, int *b)
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// Focused unit test for the T5.2 car body converter (Dx11GameFeed_CarModelToMesh):
+// verifies it decodes a CAR_MODEL's GT3/FT3 triangles — vertex indices, page-
+// scaled UVs, and the per-kind clut source (GT3 via civClut[carid][texid][palette],
+// FT3 raw clut address) + tpage. Mirrors the game's CAR_MODEL/CAR_POLY layout.
+// ---------------------------------------------------------------------------
+typedef struct { int vindices, nindices, clut_uv0, tpage_uv1, uv3_uv2; short originalindex; } TCAR_POLY;
+typedef struct { int numFT3; TCAR_POLY* pFT3; int numGT3; TCAR_POLY* pGT3; int numB3; TCAR_POLY* pB3; SVECTOR* vlist; SVECTOR* nlist; } TCAR_MODEL;
+
+static void TestCarModelConverter(FILE* resf, int* fails) {
+    SVECTOR vlist[256];
+    for (int i = 0; i < 256; ++i) { vlist[i].vx = (short)i; vlist[i].vy = (short)-i; vlist[i].vz = (short)(i * 2); }
+
+    // GT3: packed clut index 0 (carid=1,texid=0); clut resolved via civClut[1][0][2].
+    TCAR_POLY gt3;
+    gt3.vindices = 0 | (1 << 8) | (2 << 16);
+    gt3.nindices = 0;
+    gt3.clut_uv0  = (0 << 16) | (128 | 64 << 8);        // u0=128,v0=64
+    gt3.tpage_uv1 = (0x2000 << 16) | (32 | 16 << 8);    // tpage fmt 0 -> pageW 64, u1=32,v1=16
+    gt3.uv3_uv2   = (200 | 8 << 8);                      // u2=200,v2=8
+    gt3.originalindex = 0;
+
+    // FT3: clut is the raw VRAM clut address 0x3400.
+    TCAR_POLY ft3;
+    ft3.vindices = 0 | (1 << 8) | (2 << 16);
+    ft3.nindices = 0;
+    ft3.clut_uv0  = (0x3400 << 16) | (10 | 20 << 8);
+    ft3.tpage_uv1 = (0x2000 << 16) | (30 | 40 << 8);
+    ft3.uv3_uv2   = (50 | 60 << 8);
+    ft3.originalindex = 1;
+
+    TCAR_MODEL car;
+    memset(&car, 0, sizeof(car));
+    car.numGT3 = 1; car.pGT3 = &gt3;
+    car.numFT3 = 1; car.pFT3 = &ft3;
+    car.numB3  = 0;
+    car.vlist = vlist;
+    car.nlist = vlist;
+
+    u_short civClut[8][32][6];
+    memset(civClut, 0, sizeof(civClut));
+    civClut[1][0][2] = 0x1234;   // carid=1, texid=0, palette=2
+
+    Dx11ModelVertex verts[256];
+    Dx11ModelPoly polys[8];
+    int ov = 0, op = 0;
+    int rc = Dx11GameFeed_CarModelToMesh(&car, 2, civClut, verts, 256, polys, 8, &ov, &op);
+
+    int okVerts = (rc == 0 && ov == 256);
+    int okCount = (op == 2);
+    int okGT3 = okVerts ? (polys[0].vi0 == 0 && polys[0].vi1 == 1 && polys[0].vi2 == 2 && polys[0].vi3 == 2
+                          && polys[0].carTexture && polys[0].carClut == 0x1234 && polys[0].carTpage == 0x2000
+                          && polys[0].u0 == 32 && polys[0].v0 == 64 && polys[0].u1 == 8 && polys[0].v1 == 16
+                          && polys[0].u2 == 50 && polys[0].v2 == 8) : 0;
+    int okFT3 = okCount ? (polys[1].carTexture && polys[1].carClut == 0x3400 && polys[1].carTpage == 0x2000
+                           && polys[1].u0 == 2 && polys[1].v0 == 20) : 0;
+    fprintf(resf, "CAR_FEED verts=%s count=%s gt3=%s ft3=%s %s\n",
+            okVerts ? "ok" : "FAIL", okCount ? "ok" : "FAIL", okGT3 ? "ok" : "FAIL",
+            okFT3 ? "ok" : "FAIL", (okVerts && okCount && okGT3 && okFT3) ? "PASS" : "FAIL");
+    if (!okVerts) ++(*fails);
+    if (!okCount) ++(*fails);
+    if (!okGT3) ++(*fails);
+    if (!okFT3) ++(*fails);
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11RendererConfig rcfg = { 640, 240, 320, 240, 0, 0 };   // window 2x for SBS
     Dx11RendererResult rr;
@@ -149,11 +214,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     if (!resf) return 2;
     int fails = 0;
 
+    // T5.2 car body converter unit test (no renderer needed).
+    TestCarModelConverter(resf, &fails);
+
     // SBS composite: left half = eye0, right half = eye1.
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_SBS, NULL, TexResolve_Untextured,
-                             NULL /*tpages*/, "dx11_gamefeed.bmp", NULL /*customView*/);
+                             NULL /*tpages*/, NULL /*civClut*/,
+                             "dx11_gamefeed.bmp", NULL /*customView*/);
 
     int iw = 320, cy = 120;
     // NDC x = m[0][0] * (x / -z), m[0][0] = (1/tan(30deg)) / aspect = 1.299.
@@ -187,7 +256,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,
                              cmdsList, 2, colors, camPos, 0.0f, 0.1f, 0,
                              DX11C_MODE_MONO, NULL, TexResolve_Untextured,
-                             NULL /*tpages*/, "dx11_gamefeed_mono.bmp", NULL /*customView*/);
+                             NULL /*tpages*/, NULL /*civClut*/,
+                             "dx11_gamefeed_mono.bmp", NULL /*customView*/);
     int okMonoMap = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * mapCol, 120, &r, &g, &b) == 0 && IsGreen(r, g, b));
     int okMonoCar = (ProbeBMPPixel("dx11_gamefeed_mono.bmp", 2 * carCol, 120, &r, &g, &b) == 0 && IsRed(r, g, b));
     fprintf(resf, "MONO map(%d,120)=%s car(%d,120)=%s %s\n",

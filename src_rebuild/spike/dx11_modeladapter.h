@@ -67,6 +67,14 @@ typedef struct {
     unsigned char texture_set;          // -> resolved via the callback
     unsigned char texture_id;
     int sortKey;                        // translucent depth key
+    // Car body (T5.2): when carTexture is set, the poly's texture is baked
+    // directly from carTpage/carClut (full page region) instead of the resolve
+    // callback — the car body uses the game's civ_clut CLUT table, which the
+    // terrain/model resolve (texture_pages/texture_cluts) does not cover.
+    unsigned char carTexture;
+    unsigned char carPad;
+    unsigned short carTpage;            // car body VRAM texel page
+    unsigned short carClut;             // car body VRAM CLUT address
 } Dx11ModelPoly;
 
 // A raw mesh reference.

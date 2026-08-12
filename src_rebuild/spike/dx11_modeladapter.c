@@ -35,7 +35,16 @@ int Dx11ModelAdapter_Submit(Dx11Res *res, Dx11Tex *tex, Dx11DrawCmds *cmds,
 
         // Resolve + bake the texture (white substitute when untextured).
         Dx11TexHandle texh = -1;
-        if (texResolve)
+        if (poly->carTexture)
+        {
+            // Car body: the CLUT comes from the game's civ_clut table (not the
+            // terrain/texture_pages resolve). Bake the full page region (page
+            // width by tpage format x 256 tall) directly from carTpage/carClut.
+            int fmt = (poly->carTpage >> 7) & 3;
+            int pageW = (fmt == 0) ? 64 : (fmt == 1) ? 128 : 256;
+            texh = Dx11Tex_Bake(tex, poly->carTpage, poly->carClut, 0, 0, pageW, 256);
+        }
+        else if (texResolve)
         {
             Dx11ModelTexture mt;
             if (texResolve(texUser, poly->texture_set, poly->texture_id, &mt) == 0)

@@ -1765,6 +1765,7 @@ static void Dx11Game_RenderFrame(void)
 	                         camPos, yawRad, 0.0f /*sep*/, 0 /*swap*/,
 	                         DX11C_MODE_MONO, NULL /*texUser*/,
 	                         Dx11Game_TexResolve, texture_pages /*tpages*/,
+	                         civ_clut /*car body civ_clut table*/,
 	                         NULL /*bmpOut*/,
 	                         NULL /*customView*/);
 }

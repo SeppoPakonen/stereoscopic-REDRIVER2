@@ -118,4 +118,10 @@ extern void RenderModel(MODEL *model, MATRIX *matrix, VECTOR *pos, int zBias, in
 // `-renderer dx11` (worldRot * worldPos, OT-depth bucket z>>1, plot flags).
 extern void PlotFeed_SubmitModel(MODEL *model, const MATRIX *worldRot, const VECTOR *worldPos, int z, int plotFlags);
 
+// T5.2 car feed: submit a world-space DrawCommand for a CAR_MODEL car body under
+// `-renderer dx11` (worldRot * worldPos, `palette` selects the civ_clut color
+// variant). The renderer converts the CAR_MODEL (GT3/FT3/B3 triangles) via its
+// car mesh path. Legacy GTE path kept in parallel.
+extern void PlotFeed_SubmitCarModel(CAR_MODEL *model, int palette, const MATRIX *worldRot, const VECTOR *worldPos, int z);
+
 #endif

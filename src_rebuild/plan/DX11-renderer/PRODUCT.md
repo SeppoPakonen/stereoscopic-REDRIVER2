@@ -429,5 +429,37 @@ yaw-based `Dx11Stereo_ViewMatrix`, prior behaviour; the game passes NULL, and
 the game's own `inv_camera_matrix` is available for a pitch/roll-correct view).
 Full detail: `T5.2-ab-verify-in-game.md`.
 
+**Car feed (T5.2):** `DrawCar`'s **body** and **wheels** now submit world-space
+`DrawCommand`s under `-renderer dx11` (legacy GTE kept in parallel). The body is
+a game **`CAR_MODEL`** (dr2types.h) — triangulated `CAR_POLY`s (GT3 body / FT3
+bottom / B3 bottom) over a shared **dented** `vlist` (`gTempCarVertDump[cp->id]`),
+textured from the game's **`civ_clut`** table (NOT `texture_pages`/`texture_cluts`).
+This is the first non-flat-quad poly kind the feed handles:
+- **`DrawCommand.carModel`** (drawcmd.h) — a `struct CAR_MODEL *`; when set
+  (`mesh == NULL`) the command is a car body; the existing `palette` field
+  carries the car's `civ_clut` color variant.
+- **`PlotFeed_SubmitCarModel`** (draw.c, declared in draw.h) — builds + submits
+  the body command (world = `cp->hd.drawCarMat` + cog'd `where.t`, `sortKey =
+  z>>1`). `DrawCar` captures the world position (with cog) before the GTE camera
+  transform and submits in each LOD branch (`NewCarModel`/`NewLowCarModel`).
+- **`Dx11GameFeed_CarModelToMesh`** (dx11_gamefeed.c) — converts a `CAR_MODEL`
+  into the adapter's raw mesh: decodes each `vindices` triple, the page-scaled
+  packed UVs (`clut_uv0&0xffff`/`tpage_uv1&0xffff`/`uv3_uv2&0xffff`), and the
+  per-kind clut — **GT3** = `civClut[carid][texid][palette]` (carid =
+  `1+(idx/192)`, texid = `(idx%192)/6`), **FT3** = raw `clut_uv0>>16`, **B3** =
+  untextured. Emits triangles (`vi3==vi2`), two-sided, flat.
+- **`Dx11ModelPoly`** (dx11_modeladapter.h/.c) — new `carTexture`/`carTpage`/
+  `carClut` fields; when `carTexture` is set the adapter bakes the full page
+  region directly from `carTpage`/`carClut`, bypassing the terrain/model resolve
+  (which only covers `texture_pages`/`texture_cluts`).
+- **`Dx11GameFeed_RenderFrame`** gained a `civClut` param + a `carModel` branch.
+  Wheels (`MODEL` POLYFT4) reuse the existing `PlotFeed_SubmitModel` path
+  (world = `drawCarMat`(+steer) + `rot*sWheelPos + where.t`).
+
+Verified by build-link + the headless harness, which gained a `CAR_FEED`
+converter unit test (GT3 clut via civ_clut, FT3 raw clut, triangle indices,
+page-scaled UVs): `TOTAL_FAILS=0 GAMEFEED=PASS`. A real in-game visual A/B vs
+`-renderer psyx` is deferred to the user. Full detail: `T5.2-car-feed.md`.
+
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.
