@@ -10,6 +10,8 @@
 #include "system.h"
 
 #include "ASM/rndrasm.h"
+#include "../render/renderer.h"
+#include "../render/drawcmd.h"
 
 EXOBJECT explosion[MAX_EXPLOSION_OBJECTS];
 
@@ -247,6 +249,28 @@ void DrawExplosion(int time, VECTOR position, int hscale, int rscale)
 	// [A] modify scale factor to make explosions prettier
 	sf1 = FIXEDH(time * (5000 - time) * 4) + 12;
 	sf2 = FIXEDH(time * (10000 - time) * 2) + 12;
+
+#ifndef PSX
+	if (Renderer_IsDX11())
+	{
+		// T5.2 addPrim single-primitive feed: submit the explosion as a
+		// camera-facing billboard (smoke_texture, semi-transparent) at the world
+		// position, sized from the hscale/rscale scale factors. The legacy globe
+		// (GTE) path stays intact below.
+		int bbz = FIXEDH(inv_camera_matrix.m[0][2] * (position.vx - camera_position.vx)
+		               + inv_camera_matrix.m[1][2] * (position.vy - camera_position.vy)
+		               + inv_camera_matrix.m[2][2] * (position.vz - camera_position.vz));
+		unsigned char bbuv[8] = { smoke_texture.coords.u0, smoke_texture.coords.v0,
+		                          smoke_texture.coords.u1, smoke_texture.coords.v1,
+		                          smoke_texture.coords.u2, smoke_texture.coords.v2,
+		                          smoke_texture.coords.u3, smoke_texture.coords.v3 };
+		int bbcol = (transparency << 16) | (transparency << 8) | transparency;
+		PlotFeed_SubmitBillboard(&position, BILLBOARD_CAMERA,
+		                         (sf1 * rscale) / 2, (sf1 * hscale) / 2,
+		                         smoke_texture.tpageid, smoke_texture.clutid,
+		                         MATBLEND_TRANSLUCENT, bbuv, bbcol, bbz >> 3);
+	}
+#endif
 
 	for (i = 0; i < 2; i++)
 	{

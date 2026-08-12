@@ -209,6 +209,61 @@ static void TestSkyModelConverter(FILE* resf, int* fails) {
     if (!ok) ++(*fails);
 }
 
+// Focused unit test for the T5.2 addPrim single-primitive billboard converter
+// (Dx11GameFeed_BillboardToMesh): verifies it builds a 4-vertex quad + 1 flat
+// textured-quad poly carrying the material (page-scaled UVs, blend, direct-bake
+// carTexture/tpage/clut) and the flat color, in both camera-facing and world-
+// ground orientations.
+static void TestBillboardConverter(FILE* resf, int* fails) {
+    MaterialRef mat;
+    memset(&mat, 0, sizeof(mat));
+    mat.tpage = 0x2000;        // fmt 0 -> pageW 64
+    mat.clut = 0x1234;
+    mat.blendMode = MATBLEND_TRANSLUCENT;   // -> DX11SH_BLEND_AVERAGE
+
+    const unsigned char uv[8] = { 128,16, 32,16, 200,8, 32,8 };   // u0,v0,u1,v1,u2,v2,u3,v3
+    const unsigned char rgb[3] = { 200, 100, 50 };
+    float center[3] = { 0, 0, -10 };
+    float camPos[3] = { 0, 0, 0 };
+
+    Dx11ModelVertex verts[4];
+    Dx11ModelPoly poly;
+
+    // Camera-facing: toCam = +Z -> right=+X, up=+Y; halfX=5, halfY=3.
+    int rc = Dx11GameFeed_BillboardToMesh(center, BILLBOARD_CAMERA, 5, 3, &mat, uv,
+                                          rgb, 42, camPos, verts, &poly);
+    int okCam = (rc == 0
+                 && verts[0].x == -5 && verts[0].y == 3 && verts[0].z == 0     // TL
+                 && verts[1].x ==  5 && verts[1].y == 3 && verts[1].z == 0     // TR
+                 && verts[2].x == -5 && verts[2].y == -3 && verts[2].z == 0    // BL
+                 && verts[3].x ==  5 && verts[3].y == -3 && verts[3].z == 0    // BR
+                 && poly.vi0 == 0 && poly.vi1 == 1 && poly.vi3 == 3 && poly.vi2 == 2
+                 && poly.u0 == 32 && poly.v0 == 16                             // (128*64)>>8
+                 && poly.u1 == 8 && poly.v1 == 16
+                 && poly.u2 == 8 && poly.v2 == 8
+                 && poly.u3 == 50 && poly.v3 == 8                              // (200*64)>>8
+                 && poly.r == 200 && poly.g == 100 && poly.b == 50
+                 && poly.shade == DX11SH_COLOR_FLAT
+                 && poly.blend == DX11SH_BLEND_AVERAGE
+                 && poly.twoSided == 1
+                 && poly.carTexture && poly.carTpage == 0x2000 && poly.carClut == 0x1234
+                 && poly.sortKey == 42);
+    fprintf(resf, "BILLBOARD_FEED camera=%s\n", okCam ? "ok" : "FAIL");
+    if (!okCam) ++(*fails);
+
+    // World-ground: right=+X, up=+Z (quad in the XZ plane); halfX=4, halfY=2.
+    rc = Dx11GameFeed_BillboardToMesh(center, BILLBOARD_WORLD, 4, 2, &mat, uv,
+                                      rgb, 7, camPos, verts, &poly);
+    int okWorld = (rc == 0
+                   && verts[0].x == -4 && verts[0].y == 0 && verts[0].z == 2
+                   && verts[1].x ==  4 && verts[1].y == 0 && verts[1].z == 2
+                   && verts[2].x == -4 && verts[2].y == 0 && verts[2].z == -2
+                   && verts[3].x ==  4 && verts[3].y == 0 && verts[3].z == -2
+                   && poly.sortKey == 7);
+    fprintf(resf, "BILLBOARD_FEED world=%s\n", okWorld ? "ok" : "FAIL");
+    if (!okWorld) ++(*fails);
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Dx11RendererConfig rcfg = { 640, 240, 320, 240, 0, 0 };   // window 2x for SBS
     Dx11RendererResult rr;
@@ -256,6 +311,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     TestCarModelConverter(resf, &fails);
     // T5.2 sky horizon converter unit test (no renderer needed).
     TestSkyModelConverter(resf, &fails);
+    // T5.2 addPrim single-primitive billboard converter unit test (no renderer).
+    TestBillboardConverter(resf, &fails);
 
     // SBS composite: left half = eye0, right half = eye1.
     Dx11GameFeed_RenderFrame(ren, res, tex, sh, cmds, comp, proj,

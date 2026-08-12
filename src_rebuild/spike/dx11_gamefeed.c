@@ -10,6 +10,7 @@
 #include "engine/mdl.h"    // MODEL, PL_POLYFT4, SVECTOR
 #include "libgte.h"        // MATRIX
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -256,6 +257,90 @@ int Dx11GameFeed_CarModelToMesh(const void* carModel, int palette,
 }
 
 // ---------------------------------------------------------------------------
+// Single-primitive billboard -> adapter raw mesh (explosions/debris/smoke/rain/
+// tyre tracks). The command is mesh == NULL + material; the renderer builds a
+// 4-vertex quad (camera-facing or world-ground) + 1 flat textured-quad poly.
+// ---------------------------------------------------------------------------
+static int MapMaterialBlend(int b) {
+    switch (b) {
+        case MATBLEND_OPAQUE:       return DX11SH_BLEND_NONE;
+        case MATBLEND_ADDITIVE:     return DX11SH_BLEND_ADD;
+        case MATBLEND_TRANSLUCENT:
+        default:                    return DX11SH_BLEND_AVERAGE;
+    }
+}
+
+int Dx11GameFeed_BillboardToMesh(const float center[3], int orient,
+                                 short halfX, short halfY,
+                                 const MaterialRef* mat, const unsigned char uv[8],
+                                 const unsigned char rgb[3], int sortKey,
+                                 const float camPos[3],
+                                 Dx11ModelVertex* verts, Dx11ModelPoly* poly) {
+    if (!verts || !poly || !mat) return 1;
+
+    // Choose the quad basis: right + up (world units). Camera-facing derives
+    // them from the view direction; world-ground uses the XZ plane (tyre tracks).
+    float rx, ry, rz, ux, uy, uz;
+    if (orient == BILLBOARD_WORLD) {
+        rx = 1.0f; ry = 0.0f; rz = 0.0f;     // right = +X
+        ux = 0.0f; uy = 0.0f; uz = 1.0f;     // up = +Z  (quad in the XZ ground plane)
+    } else {
+        float dx = camPos[0] - center[0], dy = camPos[1] - center[1], dz = camPos[2] - center[2];
+        float len = sqrtf(dx * dx + dy * dy + dz * dz);
+        if (len < 1e-6f) { dx = 0.0f; dy = 0.0f; dz = 1.0f; len = 1.0f; }
+        float tx = dx / len, ty = dy / len, tz = dz / len;
+        // right = normalize(up=[0,1,0] x toCam) = normalize(tz, 0, -tx)
+        rx = tz; ry = 0.0f; rz = -tx;
+        float rl = sqrtf(rx * rx + rz * rz);
+        if (rl < 1e-6f) { rx = 1.0f; rz = 0.0f; rl = 1.0f; }
+        rx /= rl; rz /= rl;
+        // upB = toCam x right
+        ux = ty * rz - tz * ry;
+        uy = tz * rx - tx * rz;
+        uz = tx * ry - ty * rx;
+    }
+
+    // Model-local corners (TL, TR, BL, BR) centred at origin; the caller's
+    // `world` matrix (containing `center`) places them.
+    verts[0].x = (short)(-rx * halfX + ux * halfY);
+    verts[0].y = (short)(-ry * halfX + uy * halfY);
+    verts[0].z = (short)(-rz * halfX + uz * halfY);
+    verts[1].x = (short)( rx * halfX + ux * halfY);
+    verts[1].y = (short)( ry * halfX + uy * halfY);
+    verts[1].z = (short)( rz * halfX + uz * halfY);
+    verts[2].x = (short)(-rx * halfX - ux * halfY);
+    verts[2].y = (short)(-ry * halfX - uy * halfY);
+    verts[2].z = (short)(-rz * halfX - uz * halfY);
+    verts[3].x = (short)( rx * halfX - ux * halfY);
+    verts[3].y = (short)( ry * halfX - uy * halfY);
+    verts[3].z = (short)( rz * halfX - uz * halfY);
+    for (int k = 0; k < 4; ++k)
+        verts[k].r = verts[k].g = verts[k].b = 0;
+
+    // One flat textured quad poly; UV X scaled into the full-page texel region
+    // the carTexture direct bake covers (pageW by format), V 1:1 (256 tall).
+    int fmt = (mat->tpage >> 7) & 3;
+    int pageW = (fmt == 0) ? 64 : (fmt == 1) ? 128 : 256;
+    memset(poly, 0, sizeof(*poly));
+    poly->vi0 = 0; poly->vi1 = 1;
+    poly->vi3 = 3; poly->vi2 = 2;
+    poly->u0 = (unsigned char)((uv[0] * pageW) >> 8); poly->v0 = uv[1];
+    poly->u1 = (unsigned char)((uv[2] * pageW) >> 8); poly->v1 = uv[3];
+    poly->u2 = (unsigned char)((uv[6] * pageW) >> 8); poly->v2 = uv[7];
+    poly->u3 = (unsigned char)((uv[4] * pageW) >> 8); poly->v3 = uv[5];
+    poly->r = rgb[0]; poly->g = rgb[1]; poly->b = rgb[2];
+    poly->shade = DX11SH_COLOR_FLAT;
+    poly->blend = (unsigned char)MapMaterialBlend(mat->blendMode);
+    poly->twoSided = 1;
+    poly->nodepth = 0;
+    poly->carTexture = 1;
+    poly->carTpage = mat->tpage;
+    poly->carClut = mat->clut;
+    poly->sortKey = sortKey;
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // Sky horizon MODEL -> adapter raw mesh (sky textures via HorizonTextures).
 // ---------------------------------------------------------------------------
 // The sky horizon MODEL's polys are textured per-poly from the game's sky
@@ -397,7 +482,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
 
         for (int i = 0; i < numCmds; ++i) {
             const DrawCommand *dc = &drawCmds[i];
-            if (!dc->mesh && !dc->carModel) continue;
+            if (!dc->mesh && !dc->carModel && !dc->billboard) continue;
 
             Dx11ModelVertex *verts = NULL;
             Dx11ModelPoly *mpolys = NULL;
@@ -421,6 +506,19 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                 if (!verts || !mpolys) { free(mpolys); free(verts); return 1; }
                 Dx11GameFeed_CarModelToMesh(dc->carModel, dc->palette, civClut,
                                             verts, GFCAR_MAX_VERTS, mpolys, np, &ov, &op);
+            } else if (dc->billboard) {
+                // Single-primitive billboard (mesh == NULL + material): build a
+                // camera-facing / world-ground quad carrying its own material.
+                float center[3] = { (float)dc->world.t[0], (float)dc->world.t[1],
+                                    (float)dc->world.t[2] };
+                verts = (Dx11ModelVertex *)malloc(4 * sizeof(Dx11ModelVertex));
+                mpolys = (Dx11ModelPoly *)malloc(sizeof(Dx11ModelPoly));
+                if (!verts || !mpolys) { free(mpolys); free(verts); return 1; }
+                Dx11GameFeed_BillboardToMesh(center, dc->bbOrient, dc->bbSizeX,
+                                             dc->bbSizeY, &dc->material, dc->bbUV,
+                                             dc->bbRGB, dc->sortKey, camPos,
+                                             verts, mpolys);
+                ov = 4; op = 1;
             } else {
                 int nv = dc->mesh->num_vertices, np = dc->mesh->num_polys;
                 verts = (Dx11ModelVertex *)malloc((size_t)nv * sizeof(Dx11ModelVertex));

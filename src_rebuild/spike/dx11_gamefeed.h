@@ -83,6 +83,23 @@ int Dx11GameFeed_CarModelToMesh(const void *carModel, int palette,
                                 Dx11ModelPoly *polys, int polyCap,
                                 int *outVerts, int *outPolys);
 
+// Convert a single-primitive billboard DrawCommand (mesh == NULL + material)
+// into the adapter's raw mesh (4 verts + 1 quad poly). `center` is the world
+// position (the command's world translation); `orient` is a BillboardOrient
+// (camera-facing vs world-ground); `halfX`/`halfY` are the quad half-extents;
+// `mat` carries the tpage/clut/blend; `uv` are the 8 page-relative texel UVs
+// (u0,v0,u1,v1,u2,v2,u3,v3); `rgb` is the flat color; `sortKey` is the depth
+// key; `camPos` drives the camera-facing basis. The verts are model-local
+// (centered at origin) so the caller's `world` matrix (containing `center`)
+// places them; the UV X is scaled into the full-page texel region the direct
+// bake covers. Returns 0 on success.
+int Dx11GameFeed_BillboardToMesh(const float center[3], int orient,
+                                 short halfX, short halfY,
+                                 const MaterialRef *mat, const unsigned char uv[8],
+                                 const unsigned char rgb[3], int sortKey,
+                                 const float camPos[3],
+                                 Dx11ModelVertex *verts, Dx11ModelPoly *poly);
+
 // Render a DrawCommand[] list through the full DX11 path: for each command with a
 // mesh, convert + submit via Dx11ModelAdapter, then render both eyes into their
 // offscreen RTs and composite SBS/TB/MONO into the backbuffer, captured to BMP.

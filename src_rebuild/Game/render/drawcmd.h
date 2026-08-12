@@ -57,6 +57,12 @@ typedef enum {
 
 struct CAR_MODEL;   // game car body mesh (dr2types.h); opaque to the feed
 
+// Single-primitive billboard orientation (mesh == NULL + material path).
+typedef enum {
+    BILLBOARD_CAMERA = 0,   // quad faces the camera (smoke, explosion, debris, rain)
+    BILLBOARD_WORLD  = 1,   // world-aligned quad in the XZ ground plane (tyre tracks)
+} BillboardOrient;
+
 typedef struct {
     // Geometry source: a MODEL mesh (world-space vertices + polys). When NULL,
     // the command is a single-primitive using `material` (sprite/tile/overlay).
@@ -76,6 +82,20 @@ typedef struct {
     // per-poly texture (texture_set/texture_id) inside the mesh is authoritative;
     // this MaterialRef supplies the blend/state and a fallback texture.
     MaterialRef material;
+
+    // Single-primitive billboard (mesh == NULL, carModel == NULL): a textured
+    // quad placed at `world` (the translation) carrying its own `material` and
+    // UVs. `billboard` selects the orientation (BillboardOrient); `bbSizeX`/
+    // `bbSizeY` are the quad half-extents (world units); `bbUV` are the
+    // page-relative texel UVs (u0,v0,u1,v1,u2,v2,u3,v3). The renderer builds the
+    // 4-vertex quad and submits it through the adapter (blend state bound from
+    // material.blendMode).
+    unsigned char billboard;        // 1 = single-primitive billboard quad
+    unsigned char bbOrient;         // BillboardOrient
+    short bbSizeX;                  // half-extent X (world units)
+    short bbSizeY;                  // half-extent Y (world units)
+    unsigned char bbUV[8];          // u0,v0,u1,v1,u2,v2,u3,v3 (page-relative texels)
+    unsigned char bbRGB[3];         // flat color (r,g,b) for the billboard quad
 
     // Sort key: depth / priority for transparency ordering. The renderer sorts
     // translucent commands back-to-front by this; opaque commands are bucketed

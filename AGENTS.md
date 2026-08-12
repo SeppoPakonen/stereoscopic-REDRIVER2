@@ -227,9 +227,20 @@ slice (T5.1) are **complete**:
   `Dx11GameFeed_SkyModelToMesh` (dx11_gamefeed.c, per-poly carTpage/carClut
   direct-bake + u2,u3,u0,u1 UV remap); `main.c` passes `&skyTex`. Verified by
   build-link + a headless `SKY_FEED` converter unit test (`GAMEFEED=PASS`).
-  Still to do: the **addPrim single-primitive** effects (explosions, debris,
-  smoke, rain, tyre tracks, sprite shadows — a `mesh == NULL` + `material`
-  renderer path). See `plan/DX11-renderer/T5.2-sprite-sky-effects.md`.
+  See `plan/DX11-renderer/T5.2-sprite-sky-effects.md`.
+- **addPrim single-primitive effects feed (T5.2)**: the five addPrim effects
+  (`DrawExplosion`, `DisplayDebris`, `DisplaySmoke`, `DrawRainDrops`,
+  `DrawTyreTracks` — no `MODEL` mesh) submit world-space `DrawCommand`s under
+  `-renderer dx11` via a new **single-primitive (`mesh == NULL` + `material`)
+  billboard path**: `DrawCommand.billboard`/`bbOrient`(`BILLBOARD_CAMERA`/
+  `BILLBOARD_WORLD`)/`bbSizeX/Y`/`bbUV`/`bbRGB` + `PlotFeed_SubmitBillboard`
+  (draw.c) + `Dx11GameFeed_BillboardToMesh` (dx11_gamefeed.c, camera-facing/
+  ground quad + page-scaled UVs + carTpage/carClut direct-bake +
+  `MATBLEND_*`→`DX11SH_BLEND_*`). Verified by build-link + a headless
+  `BILLBOARD_FEED` converter unit test (`GAMEFEED=PASS`). Deferred: the projected
+  subdiv sprite-shadow (`addSubdivSpriteShadow` — a ground-projected subdiv
+  mesh, not a single primitive) + the real in-game visual A/B (user run). See
+  `plan/DX11-renderer/T5.2-sprite-sky-effects.md`.
 - **DrawGame dx11 consumer (T5.2, A/B)**: the **consumer half** — `DrawGame`'s
   `-renderer dx11` branch now renders the arena to a **companion DX11 window**
   (`Dx11GameFeed_RenderFrame` → per-eye → MONO composite) **in parallel** with
@@ -261,13 +272,14 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
 
 ## Next Steps for Future Development
 
-1. Finish the plot-function feed rewiring: the addPrim single-primitive effects
-   (explosions, debris, smoke, rain, tyre tracks, sprite shadows — a
-   `mesh == NULL` + `material` renderer path). The terrain/tile feed (T5.2 core)
-   + the DrawGame dx11 consumer (A/B companion window) + real feed texture
-   baking + the in-game A/B verification + the car body/wheels feed + the
-   MODEL-based sprites/effects feed + the sky feed are done; pitch/roll camera
-   is the immediate follow-up.
+1. Finish the plot-function feed rewiring: the projected subdiv sprite-shadow
+   (`addSubdivSpriteShadow` — a ground-projected subdiv mesh) + the real
+   in-game visual A/B of the effects (explosions/debris/smoke/rain/tyre tracks).
+   The terrain/tile feed (T5.2 core) + the DrawGame dx11 consumer (A/B companion
+   window) + real feed texture baking + the in-game A/B verification + the car
+   body/wheels feed + the MODEL-based sprites/effects feed + the sky feed + the
+   addPrim single-primitive effects feed are done; pitch/roll camera is the
+   immediate follow-up.
 2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
 3. Advanced quality tuning / performance optimization for stereo rendering.
@@ -283,5 +295,6 @@ terrain/tile feed + DrawGame dx11 consumer (A/B) + in-game A/B verified
 (terrain feed renders in the companion window) + car body/wheels feed
 (CAR_MODEL + civ_clut, headless CAR_FEED test PASS) + MODEL-based sprites/
 effects feed + sky feed (skytpage/skyclut/skytexuv, headless SKY_FEED test
-PASS); launcher + stereo GUI working, DX11 + modern GL backends selectable,
-mono/per-eye/stereo-composite A/B-verified
+PASS) + addPrim single-primitive effects feed (billboard mesh==NULL+material
+path, headless BILLBOARD_FEED test PASS); launcher + stereo GUI working,
+DX11 + modern GL backends selectable, mono/per-eye/stereo-composite A/B-verified

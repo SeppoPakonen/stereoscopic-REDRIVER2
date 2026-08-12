@@ -15,6 +15,7 @@
 #include "map.h"
 #include "mission.h"
 #include "draw.h"
+#include "../render/drawcmd.h"
 #include "../render/renderer.h"
 #include "models.h"
 #include "players.h"
@@ -3023,6 +3024,41 @@ void DisplayDebris(DEBRIS *debris, char type)
 	debrisvec.vy = debris->position.vy - camera_position.vy;
 	debrisvec.vz = debris->position.vz - camera_position.vz;
 
+#ifndef PSX
+	if (Renderer_IsDX11())
+	{
+		// T5.2 addPrim single-primitive feed: submit the debris as a small
+		// camera-facing billboard (litter/debris texture, semi-transparent) at
+		// the world position. The legacy GTE path stays intact below.
+		int bbz = FIXEDH(inv_camera_matrix.m[0][2] * (debris->position.vx - camera_position.vx)
+		               + inv_camera_matrix.m[1][2] * (debris->position.vy - camera_position.vy)
+		               + inv_camera_matrix.m[2][2] * (debris->position.vz - camera_position.vz));
+		unsigned char bbuv[8];
+		unsigned short tpage, clut;
+		if (type - 1U < 2)
+		{
+			bbuv[0] = litter_texture.coords.u0; bbuv[1] = litter_texture.coords.v0;
+			bbuv[2] = litter_texture.coords.u1; bbuv[3] = litter_texture.coords.v1;
+			bbuv[4] = litter_texture.coords.u2; bbuv[5] = litter_texture.coords.v2;
+			bbuv[6] = litter_texture.coords.u3; bbuv[7] = litter_texture.coords.v3;
+			tpage = litter_texture.tpageid; clut = litter_texture.clutid;
+		}
+		else
+		{
+			bbuv[0] = debris_texture.coords.u0; bbuv[1] = debris_texture.coords.v0;
+			bbuv[2] = debris_texture.coords.u1; bbuv[3] = debris_texture.coords.v1;
+			bbuv[4] = debris_texture.coords.u2; bbuv[5] = debris_texture.coords.v2;
+			bbuv[6] = debris_texture.coords.u3; bbuv[7] = debris_texture.coords.v3;
+			tpage = debris_texture.tpageid; clut = debris_texture.clutid;
+		}
+		int col = (debris->rgb.r + combointensity)
+		        | (debris->rgb.g + combointensity) << 8
+		        | (debris->rgb.b + combointensity) << 16;
+		PlotFeed_SubmitBillboard(&debris->position, BILLBOARD_CAMERA, 6, 6,
+		                         tpage, clut, MATBLEND_TRANSLUCENT, bbuv, col, bbz >> 3);
+	}
+#endif
+
 	if (debrisvec.vx >= -10000 && 
 		debrisvec.vz >= -10000 && 
 		debrisvec.vx <= 10000 &&
@@ -3136,6 +3172,31 @@ void DisplaySmoke(SMOKE* smoke)
 
 	if (ABS(v.vx) > 20480 || ABS(v.vz) > 20480)
 		return;
+
+#ifndef PSX
+	if (Renderer_IsDX11())
+	{
+		// T5.2 addPrim single-primitive feed: submit the smoke puff as a
+		// camera-facing billboard (smoke_texture, semi-transparent) at the
+		// world position, half-extent start_w. The legacy GTE path stays intact.
+		int bbz = FIXEDH(inv_camera_matrix.m[0][2] * (smoke->position.vx - camera_position.vx)
+		               + inv_camera_matrix.m[1][2] * (smoke->position.vy - camera_position.vy)
+		               + inv_camera_matrix.m[2][2] * (smoke->position.vz - camera_position.vz));
+		unsigned char bbuv[8] = { smoke_texture.coords.u0, smoke_texture.coords.v0,
+		                          smoke_texture.coords.u1, smoke_texture.coords.v1,
+		                          smoke_texture.coords.u2, smoke_texture.coords.v2,
+		                          smoke_texture.coords.u3, smoke_texture.coords.v3 };
+		int bbcol = (smoke->transparency << 16) | (smoke->transparency << 8) | smoke->transparency;
+		VECTOR bbpos;
+		bbpos.vx = smoke->position.vx;
+		bbpos.vy = smoke->position.vy;
+		bbpos.vz = smoke->position.vz;
+		PlotFeed_SubmitBillboard(&bbpos, BILLBOARD_CAMERA,
+		                         smoke->start_w, smoke->start_w,
+		                         smoke_texture.tpageid, smoke_texture.clutid,
+		                         MATBLEND_TRANSLUCENT, bbuv, bbcol, bbz >> 3);
+	}
+#endif
 
 	Apply_Inv_CameraMatrix(&v);
 
@@ -3730,6 +3791,30 @@ void DrawRainDrops(void)
 		v.vx = RainPtr->position.vx - camera_position.vx;
 		v.vy = RainPtr->position.vy - camera_position.vy;
 		v.vz = RainPtr->position.vz - camera_position.vz;
+
+#ifndef PSX
+		if (Renderer_IsDX11())
+		{
+			// T5.2 addPrim single-primitive feed: submit each rain streak as a
+			// thin camera-facing billboard (light_texture, semi-transparent) at
+			// the world position. The legacy GTE path stays intact below.
+			int bbz = FIXEDH(inv_camera_matrix.m[0][2] * v.vx
+			               + inv_camera_matrix.m[1][2] * v.vy
+			               + inv_camera_matrix.m[2][2] * v.vz);
+			unsigned char bbuv[8] = { light_texture.coords.u0, light_texture.coords.v0,
+			                          light_texture.coords.u1, light_texture.coords.v1,
+			                          light_texture.coords.u2, light_texture.coords.v2,
+			                          light_texture.coords.u3, light_texture.coords.v3 };
+			VECTOR bbpos;
+			bbpos.vx = RainPtr->position.vx;
+			bbpos.vy = RainPtr->position.vy;
+			bbpos.vz = RainPtr->position.vz;
+			PlotFeed_SubmitBillboard(&bbpos, BILLBOARD_CAMERA,
+			                         2, RAIN_DROP_SPEED / 2,
+			                         light_texture.tpageid, light_texture.clutid,
+			                         MATBLEND_TRANSLUCENT, bbuv, col & 0xffffff, bbz >> 1);
+		}
+#endif
 
 		if (pauseflag) 
 		{

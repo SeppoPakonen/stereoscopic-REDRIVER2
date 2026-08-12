@@ -129,4 +129,17 @@ extern void PlotFeed_SubmitModel(MODEL *model, const MATRIX *worldRot, const VEC
 // car mesh path. Legacy GTE path kept in parallel.
 extern void PlotFeed_SubmitCarModel(CAR_MODEL *model, int palette, const MATRIX *worldRot, const VECTOR *worldPos, int z);
 
+// T5.2 addPrim single-primitive feed: submit a world-space billboard DrawCommand
+// (mesh == NULL + material) under `-renderer dx11`. `orient` is a BillboardOrient
+// (camera-facing vs world-ground); `halfX`/`halfY` are the quad half-extents;
+// `tpage`/`clut` are the PSX texture page/CLUT (VRAM addresses, WITHOUT the
+// blend bits); `blendMode` is a MaterialBlend; `uv` is the 8-texel page-relative
+// UV quad (u0,v0,u1,v1,u2,v2,u3,v3); `rgb` is the flat color (low 24 bits);
+// `sortKey` is the OT-bucketed depth. Legacy GTE path kept in parallel.
+extern void PlotFeed_SubmitBillboard(const VECTOR *worldPos, int orient,
+                                     int halfX, int halfY,
+                                     unsigned short tpage, unsigned short clut,
+                                     int blendMode, const unsigned char uv[8],
+                                     int rgb, int sortKey);
+
 #endif

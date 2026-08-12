@@ -13,6 +13,8 @@
 
 #include "mission.h"
 #include "tile.h"
+#include "../render/renderer.h"
+#include "../render/drawcmd.h"
 
 struct TYRE_TRACK
 {
@@ -376,6 +378,33 @@ void DrawTyreTracks(void)
 						poly->r0 = 17;
 						poly->g0 = poly->b0 = 35;
 					}
+
+#ifndef PSX
+					if (Renderer_IsDX11())
+					{
+						// T5.2 addPrim single-primitive feed: submit the track
+						// quad as a world-ground billboard (gTyreTexture,
+						// semi-transparent) centred on the 4 corner points. The
+						// legacy GTE path stays intact below.
+						VECTOR bbpos;
+						bbpos.vx = (tt_p->p1.vx + tt_p->p2.vx + tt_p->p3.vx + tt_p->p4.vx) / 4;
+						bbpos.vy = (tt_p->p1.vy + tt_p->p2.vy + tt_p->p3.vy + tt_p->p4.vy) / 4;
+						bbpos.vz = (tt_p->p1.vz + tt_p->p2.vz + tt_p->p3.vz + tt_p->p4.vz) / 4;
+						int hx = (abs(tt_p->p1.vx - tt_p->p3.vx) + abs(tt_p->p2.vx - tt_p->p4.vx) + 1) / 2;
+						int hz = (abs(tt_p->p1.vz - tt_p->p3.vz) + abs(tt_p->p2.vz - tt_p->p4.vz) + 1) / 2;
+
+						unsigned char bbuv[8] = { gTyreTexture.coords.u0, gTyreTexture.coords.v0,
+						                          gTyreTexture.coords.u1, gTyreTexture.coords.v1,
+						                          gTyreTexture.coords.u2, gTyreTexture.coords.v2,
+						                          gTyreTexture.coords.u3, gTyreTexture.coords.v3 };
+						int bbcol = (tt_p->surface == 1)
+						          ? (26 | 26 << 8 | 26 << 16)
+						          : (17 | 35 << 8 | 35 << 16);
+						PlotFeed_SubmitBillboard(&bbpos, BILLBOARD_WORLD, hx, hz,
+						                         gTyreTexture.tpageid, gTyreTexture.clutid,
+						                         MATBLEND_TRANSLUCENT, bbuv, bbcol, z >> 3);
+					}
+#endif
 
 					*(ushort*)&poly->u0 = *(ushort*)&gTyreTexture.coords.u0;
 					*(ushort*)&poly->u1 = *(ushort*)&gTyreTexture.coords.u1;

@@ -1297,6 +1297,53 @@ void PlotFeed_SubmitCarModel(CAR_MODEL* model, int palette, const MATRIX* worldR
 	DrawCmd_Submit(&cmd);
 }
 
+// T5.2 addPrim single-primitive feed: build + submit a world-space billboard
+// DrawCommand (mesh == NULL + material) under `-renderer dx11`. The renderer
+// builds a camera-facing (or world-ground) quad of half-extents `halfX`/`halfY`
+// at `worldPos`, textured from `tpage`/`clut` (VRAM addresses, no blend bits)
+// with the supplied page-relative `uv`, blended by `blendMode`, and sorted by
+// `sortKey`. The legacy GTE path is untouched (called in parallel).
+void PlotFeed_SubmitBillboard(const VECTOR* worldPos, int orient,
+                              int halfX, int halfY,
+                              unsigned short tpage, unsigned short clut,
+                              int blendMode, const unsigned char uv[8],
+                              int rgb, int sortKey)
+{
+	DrawCommand cmd;
+	memset(&cmd, 0, sizeof(cmd));
+
+	cmd.billboard = 1;
+	cmd.bbOrient = (unsigned char)orient;
+	cmd.bbSizeX = (short)halfX;
+	cmd.bbSizeY = (short)halfY;
+
+	InitMatrix(cmd.world);
+	if (worldPos)
+	{
+		cmd.world.t[0] = worldPos->vx;
+		cmd.world.t[1] = worldPos->vy;
+		cmd.world.t[2] = worldPos->vz;
+	}
+
+	cmd.material.tpage = tpage;
+	cmd.material.clut = clut;
+	cmd.material.blendMode = (unsigned char)blendMode;
+	cmd.material.filter = 0;
+
+	if (uv) memcpy(cmd.bbUV, uv, 8);
+	cmd.bbRGB[0] = rgb & 0xff;
+	cmd.bbRGB[1] = (rgb >> 8) & 0xff;
+	cmd.bbRGB[2] = (rgb >> 16) & 0xff;
+
+	cmd.sortKey = sortKey;
+	cmd.flags = DRAWCMD_TRANSLUCENT | DRAWCMD_TWOSIDED | DRAWCMD_FLAT;
+
+	cmd.palette = -1;
+	cmd.subdiv = -1;
+
+	DrawCmd_Submit(&cmd);
+}
+
 // [D] [T]
 void RenderModel(MODEL* model, MATRIX* matrix, VECTOR* pos, int zBias, int flags, int subdiv, int nrot)
 {

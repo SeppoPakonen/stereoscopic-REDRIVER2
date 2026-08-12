@@ -498,9 +498,39 @@ the model's `texture_set`/`texture_id`/UVs (which `PlotSkyPoly` overrides):
 
 Verified by build-link + a headless `SKY_FEED` converter unit test (sky texture
 via HorizonTextures + carTpage/carClut + UV remap): `TOTAL_FAILS=0 GAMEFEED=PASS`.
-Still to do: the **addPrim single-primitive** effects (explosions, debris, smoke,
-rain, tyre tracks, sprite shadows — need a `mesh == NULL` + `material` renderer
-path). Full detail: `T5.2-sprite-sky-effects.md`.
+Full detail: `T5.2-sprite-sky-effects.md`.
+
+**addPrim single-primitive effects feed (T5.2):** the five addPrim effects now
+submit world-space `DrawCommand`s under `-renderer dx11` (legacy GTE kept in
+parallel) via a new **single-primitive (`mesh == NULL` + `material`) billboard
+path**:
+- **`DrawCommand.billboard`** (drawcmd.h) — `billboard` (1 = single-primitive
+  quad), `bbOrient` (`BILLBOARD_CAMERA` = camera-facing /
+  `BILLBOARD_WORLD` = XZ ground plane), `bbSizeX`/`bbSizeY` (half-extents),
+  `bbUV[8]` (page-relative texel UVs), `bbRGB[3]` (flat color). `world` carries
+  the placement translation.
+- **`PlotFeed_SubmitBillboard`** (draw.c, declared in draw.h) — builds + submits
+  the command from a world position + the effect's `tpageid`/`clutid` (VRAM, no
+  blend bits) + `MATBLEND_*` + UVs + color + OT-depth sort key.
+- **`Dx11GameFeed_BillboardToMesh`** (dx11_gamefeed.c) — converts the command to
+  a 4-vertex quad + 1 flat textured-quad poly: camera-facing basis from
+  `camPos − center` (or the XZ ground basis for world), UV X scaled by page
+  width, `carTpage`/`carClut` direct-bake (full page), and the `MATBLEND_*` →
+  `DX11SH_BLEND_*` mapping (OPAQUE→NONE, TRANSLUCENT→AVERAGE, ADDITIVE→ADD).
+  `RenderFrame` dispatches on `dc->billboard` and submits through the adapter
+  (which already binds the per-command blend state).
+- Effects wired (`#ifndef PSX` + `Renderer_IsDX11()`): **`DrawExplosion`**
+  (job_fx.c, camera-facing smoke_texture billboard), **`DisplayDebris`**
+  (debris.c, litter/debris texture), **`DisplaySmoke`** (debris.c, camera-facing
+  smoke_texture), **`DrawRainDrops`** (debris.c, thin light_texture streak),
+  **`DrawTyreTracks`** (shadow.c, world-ground gTyreTexture quad).
+
+Verified by build-link + a headless `BILLBOARD_FEED` converter unit test
+(camera-facing + world-ground quad geometry, page-scaled UVs, blend mapping,
+carTexture/tpage/clut direct-bake, flat color): `TOTAL_FAILS=0 GAMEFEED=PASS`.
+Deferred: the projected subdiv sprite-shadow (`addSubdivSpriteShadow` — a
+ground-projected subdiv mesh, not a single primitive) + the real in-game visual
+A/B (user run). Full detail: `T5.2-sprite-sky-effects.md`.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.
