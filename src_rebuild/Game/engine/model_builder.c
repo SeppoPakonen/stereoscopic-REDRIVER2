@@ -22,19 +22,24 @@ MODEL* ModelBuilder_FromObj(const ObjModel* obj, float scale, int textureSet, in
     if (!model) return NULL;
     memset(model, 0, totalSize);
 
-    // Set MODEL fields. GET_MODEL_DATA is ((TYPE*)MDL->FIELD), i.e. these fields
-    // hold the actual address (cast to int), not a byte offset into the block.
+    // Set MODEL fields. On the PC build (PSX not defined) GET_MODEL_DATA resolves
+    // via _MDL_GETTER_*/_MDL_GETTER_poly_block which compute (MDL + FIELD), so
+    // vertices/poly_block hold a BYTE OFFSET into the model's data block.
     model->num_vertices = (u_short)obj->numVertices;
     model->num_polys = (u_short)numQuads;
-    model->vertices = (int)((char*)model + sizeof(MODEL));
-    model->poly_block = (int)((char*)model + sizeof(MODEL) + vertSize);
+    model->vertices = sizeof(MODEL);
+    model->poly_block = sizeof(MODEL) + vertSize;
     model->shape_flags = 0;
     model->flags2 = 0;
     model->zBias = 0;
     model->bounding_sphere = 0;
+    // Not an instanced model: -1 keeps _MDL_GETTER_vertices/_normals/etc from
+    // redirecting to modelpointers[] (which are unloaded in the test loop and
+    // NULL/instance-0 would be dereferenced, crashing).
+    model->instance_number = -1;
 
     // Copy vertices (scale from OBJ units to game units).
-    SVECTOR* verts = (SVECTOR*)model->vertices;
+    SVECTOR* verts = (SVECTOR*)((unsigned char*)model + model->vertices);
     for (int i = 0; i < obj->numVertices; i++) {
         verts[i].vx = (short)(obj->vertices[i].x * scale);
         verts[i].vy = (short)(obj->vertices[i].y * scale);
@@ -42,7 +47,7 @@ MODEL* ModelBuilder_FromObj(const ObjModel* obj, float scale, int textureSet, in
     }
 
     // Merge triangle pairs into quads.
-    PL_POLYFT4* polys = (PL_POLYFT4*)model->poly_block;
+    PL_POLYFT4* polys = (PL_POLYFT4*)((unsigned char*)model + model->poly_block);
     for (int i = 0; i < numQuads; i++) {
         int t0 = i * 2;      // first triangle of the pair
         int t1 = i * 2 + 1;  // second triangle of the pair

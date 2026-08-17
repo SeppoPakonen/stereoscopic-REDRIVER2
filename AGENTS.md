@@ -188,10 +188,12 @@ slice (T5.1) are **complete**:
   `TextureLoader_LoadPng` loads a PNG (stb_image) → downscales to one 64×64 PSX
   16-bit page → RGB555 → `LoadImage` into VRAM (512,256) → `GetTPage(2,0,512,256)`
   (no CLUT). `-testobj` = `-testcube` + the chain: loads `cube.obj`/`cube.png`,
-  builds `gTestCubeModel`, uploads texture_set 127. MVP renders it to the
-  **feed** backends (soft/dx11) via `PlotFeed_SubmitModel`; the **GTE
-  `RenderModel` path still crashes** in the bypassed loop (GTE render state not
-  initialised) — that init is the deferred TODO.
+  builds `gTestCubeModel`, uploads texture_set 127, and renders the cube
+  **textured** in the psyx window (GTE `RenderModel` works; three gdb-found
+  fixes: `MODEL.vertices/poly_block` are byte offsets on PC, `instance_number=-1`
+  so `_MDL_GETTER_*` don't redirect to unloaded `modelpointers[]`, and the GTE
+  test camera is initialised). Feed (soft/dx11) rendering of the cube is a
+  follow-up.
 - **Standalone DX11 modules** in `src_rebuild/spike/` (the `dx11_renderer`,
   `dx11_resources`, `dx11_textures`, `dx11_shaders`, `dx11_drawcmdexec`,
   `dx11_modeladapter`, `dx11_input`, `dx11_audio`, `dx11_stereo`,

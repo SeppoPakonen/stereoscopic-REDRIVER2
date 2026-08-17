@@ -618,16 +618,17 @@ it in the `-testcube` test-frame (plan 001–005).
   builds `gTestCubeModel` and uploads cube.png as texture_set 127, then the
   `-testcube` render loop runs `TestCube_RenderObjFrame()`.
 - **`TestCube_LoadAssets` / `TestCube_RenderObjFrame`** (main.c) — asset
-  loading + per-frame draw. MVP status: the **feed backends (soft/dx11)** get the
-  cube via `PlotFeed_SubmitModel` (world `identity` + pos z=500). The **GTE
-  `RenderModel` path is NOT wired yet**: the bypassed test loop never
-  initialises the GTE render state (`inv_camera_matrix`/geom/compounds) that
-  `RenderModel` assumes, and calling it crashes the process (documented in the
-  code). Fix = initialise the GTE test camera + call `RenderModel` — deferred.
-
-Verified: `-renderer soft -testobj` builds+runs stably (no crash over 8s), loads
-8 verts / 12 faces / 1 material, uploads a 64×64 texture, builds an 8-vert / 6-poly
-MODEL. Full doc: `plan/001-*.md` … `plan/005-cube-render-integration.md`.
+  loading + per-frame draw. The **GTE `RenderModel` path now works** (textured
+  cube in the psyx window). Three bugs fixed after a gdb stack on
+  `_MDL_GETTER_vertices`: (1) `MODEL.vertices/poly_block` are BYTE OFFSETS on the
+  PC build (resolved by `_MDL_GETTER_*` = `mdl+FIELD`); (2) `ModelBuilder_FromObj`
+  sets `instance_number = -1` so the getters don't redirect to `modelpointers[]`;
+  (3) the GTE test camera is initialised (identity `inv_camera_matrix`, camera at
+  origin, `scr_z=500`). `gSkipRenderFeedTest` disables RenderModel's PlotFeed
+  branch (the bypassed loop doesn't drive the DrawCommand feed). Verified:
+  `-renderer soft -testobj` runs stably (9s+, no crash) and renders the textured
+  cube in the psyx window. Feed rendering of the cube follows separately.
+  Full doc: `plan/001-*.md` … `plan/005-cube-render-integration.md`.
 
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

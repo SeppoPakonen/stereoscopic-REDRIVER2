@@ -13,13 +13,19 @@ Integrate all previous tasks (001–004) to render the test cube in both psyx an
 - DONE: `-testobj` command-line variant wires `TestCube_LoadAssets()` +
   `TestCube_RenderObjFrame()` into the `-testcube` frame loop (stably loads 8
   verts / 12 faces / 1 material; 64×64 texture upload OK).
-- DEFERRED (TODO): the **GTE `RenderModel`** path in `TestCube_RenderObjFrame`.
-  In the bypassed test loop the GTE render state (`inv_camera_matrix`, geom offset,
-  compounds) that `RenderModel` assumes is never initialised, so calling it
-  crashes the process. MVP emits the cube to the **feed** backends
-  (soft/dx11) via `PlotFeed_SubmitModel` instead. Fix = initialise the GTE test
-  camera (inv_camera_matrix = identity, SetGeomOffset/scr_z) and call
-  `RenderModel` so the cube renders *textured* in the psyx window.
+- DONE: **GTE `RenderModel`** path renders the cube textured through
+  `PlotModelSubdivNxN`, once three underlying bugs were found via a
+  debugger (gdb) stack on `_MDL_GETTER_vertices`:
+  1. `MODEL.vertices`/`poly_block` must hold **byte offsets** — the PC build
+     resolves them via `_MDL_GETTER_*` (`mdl + FIELD`), not `(TYPE*)FIELD`.
+  2. `ModelBuilder_FromObj` must set `instance_number = -1`; otherwise
+     `_MDL_GETTER_vertices` redirects to `modelpointers[0]` (unloaded and NULL in
+     the bypassed test loop) and crashes.
+  3. The GTE test camera must be initialised: identity `inv_camera_matrix`,
+     `camera_position` at the origin, `scr_z = 500`.
+  Verified: `-renderer soft -testobj` runs stably (9s+, no crash) and renders the
+  textured cube in the psyx window. Feed rendering of the cube (soft/dx11 via
+  `PlotFeed_SubmitModel`) is a separate, still-open follow-up.
 
 ## Scope
 - Load cube.obj/cube.mtl/cube.png using loaders from 001–003
