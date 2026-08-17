@@ -13,6 +13,63 @@
         } \
     } while (0)
 
+// Append a new material to the model's material array (grows dynamically).
+static ObjMaterial* AddMaterial(ObjModel* model, const char* name) {
+    int newCount = model->numMaterials + 1;
+    ObjMaterial* nm = (ObjMaterial*)realloc(model->materials, newCount * sizeof(ObjMaterial));
+    if (!nm) return NULL;
+    model->materials = nm;
+    ObjMaterial* m = &model->materials[model->numMaterials];
+    memset(m, 0, sizeof(ObjMaterial));
+    strncpy(m->name, name, sizeof(m->name) - 1);
+    m->Kd[0] = m->Kd[1] = m->Kd[2] = 1.0f; // default white diffuse
+    model->numMaterials = newCount;
+    return m;
+}
+
+// Parse a Wavefront .mtl material library file referenced by `mtllib <file>`
+// in the OBJ. Fills model->materials[]. Returns 0 on success (even if the MTL
+// file itself is missing — the OBJ is still valid).
+// dir: the directory containing the OBJ (so a bare `cube.mtl` resolves).
+static int ObjLoadMtl(const char* mtlFilename, const char* dir, ObjModel* model) {
+    char full[512];
+    if (mtlFilename[0] == '\\' || mtlFilename[0] == '/' ||
+        (mtlFilename[1] == ':' && (mtlFilename[2] == '\\' || mtlFilename[2] == '/')))
+        snprintf(full, sizeof(full), "%s", mtlFilename);
+    else
+        snprintf(full, sizeof(full), "%s%s", dir ? dir : "", mtlFilename);
+
+    FILE* f = fopen(full, "r");
+    if (!f) {
+        fprintf(stderr, "[ObjLoad] MTL not found: %s\n", full);
+        return 1;
+    }
+
+    ObjMaterial* cur = NULL;
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+
+        if (strncmp(line, "newmtl ", 7) == 0) {
+            char nm[64];
+            sscanf(line + 7, "%63s", nm);
+            cur = AddMaterial(model, nm);
+        } else if (cur && strncmp(line, "Kd ", 3) == 0) {
+            sscanf(line + 3, "%f %f %f", &cur->Kd[0], &cur->Kd[1], &cur->Kd[2]);
+        } else if (cur && (strncmp(line, "map_Kd ", 7) == 0 || strncmp(line, "map_Ka ", 7) == 0)) {
+            // First texture map wins (map_Kd preferred by the MTL spec, but both
+            // are captured; callers read mapKd).
+            if (cur->mapKd[0] == '\0') {
+                char tex[256];
+                sscanf(line + 7, "%255s", tex);
+                strncpy(cur->mapKd, tex, sizeof(cur->mapKd) - 1);
+            }
+        }
+    }
+    fclose(f);
+    return 0;
+}
+
 // Parse a face vertex index (e.g., "1/2/3" or "1//3" or "1").
 static void ParseFaceVertex(const char* str, int* v, int* vt, int* vn) {
     *v = *vt = *vn = 0;
@@ -37,6 +94,23 @@ static void ParseFaceVertex(const char* str, int* v, int* vt, int* vn) {
 int ObjLoad(const char* filename, ObjModel* model) {
     if (!filename || !model) return 1;
     memset(model, 0, sizeof(ObjModel));
+
+    // Directory of the OBJ file, so a relative `mtllib cube.mtl` (and, later,
+    // `map_Kd cube.png`) resolves next to the OBJ.
+    char dirbuf[512];
+    const char* dir = NULL;
+    {
+        const char* slash = strrchr(filename, '/');
+        const char* bs = strrchr(filename, '\\');
+        const char* last = (bs && (!slash || bs > slash)) ? bs : slash;
+        if (last) {
+            int len = (int)(last - filename) + 1;
+            if (len >= (int)sizeof(dirbuf)) len = (int)sizeof(dirbuf) - 1;
+            memcpy(dirbuf, filename, len);
+            dirbuf[len] = '\0';
+            dir = dirbuf;
+        }
+    }
 
     FILE* f = fopen(filename, "r");
     if (!f) {
@@ -100,8 +174,7 @@ int ObjLoad(const char* filename, ObjModel* model) {
             // Material library — load MTL file.
             char mtlFilename[256];
             sscanf(line + 7, "%255s", mtlFilename);
-            // TODO: Load MTL file (001-obj-mtl-loader task).
-            // For now, just store the filename for later.
+            ObjLoadMtl(mtlFilename, dir, model);
         }
     }
 

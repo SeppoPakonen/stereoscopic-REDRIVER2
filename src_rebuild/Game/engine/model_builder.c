@@ -82,14 +82,15 @@ MODEL* ModelBuilder_FromObj(const ObjModel* obj, float scale, int textureSet, in
         polys[i].uv0.v = (u_char)((1.0f - obj->texCoords[f0->vt[0]].v) * 255.0f);
         polys[i].uv1.u = (u_char)(obj->texCoords[f0->vt[1]].u * 255.0f);
         polys[i].uv1.v = (u_char)((1.0f - obj->texCoords[f0->vt[1]].v) * 255.0f);
-        // Find the UV from f1 that corresponds to v3.
+        // uv2 belongs to v2 (tri0's third vertex), uv3 to the fourth vertex v3
+        // (the vertex in tri1 not shared by tri0). Not a copy of uv2.
+        polys[i].uv2.u = (u_char)(obj->texCoords[f0->vt[2]].u * 255.0f);
+        polys[i].uv2.v = (u_char)((1.0f - obj->texCoords[f0->vt[2]].v) * 255.0f);
         int uv3 = f1->vt[0];
         if (v3 == f1->v[1]) uv3 = f1->vt[1];
         else if (v3 == f1->v[2]) uv3 = f1->vt[2];
-        polys[i].uv2.u = (u_char)(obj->texCoords[uv3].u * 255.0f);
-        polys[i].uv2.v = (u_char)((1.0f - obj->texCoords[uv3].v) * 255.0f);
-        polys[i].uv3.u = polys[i].uv2.u;
-        polys[i].uv3.v = polys[i].uv2.v;
+        polys[i].uv3.u = (u_char)(obj->texCoords[uv3].u * 255.0f);
+        polys[i].uv3.v = (u_char)((1.0f - obj->texCoords[uv3].v) * 255.0f);
     }
 
     return model;

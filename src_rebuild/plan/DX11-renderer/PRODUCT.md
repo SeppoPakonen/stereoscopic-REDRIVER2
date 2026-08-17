@@ -596,5 +596,38 @@ level/mission/simulation system, used to A/B the projection geometrically
   popup, no stderr; loop runs end-to-end). The OBJ/MTL/PNG loaders +
   `ModelBuilder` and the test camera live in plan 001–005.
 
+**OBJ/MTL/PNG loaders + ModelBuilder + `-testobj` (plan 001–005):** the
+OBJ/MTL/PNG asset chain for loading a real 3D model into the engine and showing
+it in the `-testcube` test-frame (plan 001–005).
+- **`engine/obj_loader.{h,c}`** — `ObjLoad(filename)` / `ObjFree()`: parses OBJ
+  `v/vt/vn/f/usemtl/mtllib` into `ObjModel`, and now also **loads the MTL**
+  (`mtllib` → `newmtl`/`Kd`/`map_Kd`/`map_Ka` into `ObjModel.materials`), with the
+  MTL resolved next to the OBJ file.
+- **`engine/model_builder.{h,c}`** — `ModelBuilder_FromObj(obj, scale, texSet,
+  texId)` / `ModelBuilder_Free()`: builds a game `MODEL` (SVECTOR verts +
+  `PL_POLYFT4` quads merged from the OBJ triangle pairs, single block, offsets).
+  UV fix: `uv0..uv3` now map 1:1 onto quad corners `v0..v3` (previously `uv3` was
+  a copy of `uv2`, skewing the last corner).
+- **`engine/texture_loader.{h,c}`** — `TextureLoader_LoadPng(filename, &tpage,
+  &w, &h)`: `stb_image` → downscale to one **64×64 PSX 16-bit page** (nearest;
+  protects against a 512×512 PNG overflowing the 1024×512 VRAM) → RGB555 →
+  `LoadImage` at the free VRAM slot (512,256) → `GetTPage(2,0,512,256)` (`tp=2`
+  = 16-bit, **no CLUT needed**). Returns the tpage word for `texture_pages[set]`.
+- **`-testobj`** (main.c) — `-testcube` + the OBJ/MTL/PNG chain: loads
+  `cube.obj`/`cube.png` (resolved next to the exe with `TestCube_FindFile`),
+  builds `gTestCubeModel` and uploads cube.png as texture_set 127, then the
+  `-testcube` render loop runs `TestCube_RenderObjFrame()`.
+- **`TestCube_LoadAssets` / `TestCube_RenderObjFrame`** (main.c) — asset
+  loading + per-frame draw. MVP status: the **feed backends (soft/dx11)** get the
+  cube via `PlotFeed_SubmitModel` (world `identity` + pos z=500). The **GTE
+  `RenderModel` path is NOT wired yet**: the bypassed test loop never
+  initialises the GTE render state (`inv_camera_matrix`/geom/compounds) that
+  `RenderModel` assumes, and calling it crashes the process (documented in the
+  code). Fix = initialise the GTE test camera + call `RenderModel` — deferred.
+
+Verified: `-renderer soft -testobj` builds+runs stably (no crash over 8s), loads
+8 verts / 12 faces / 1 material, uploads a 64×64 texture, builds an 8-vert / 6-poly
+MODEL. Full doc: `plan/001-*.md` … `plan/005-cube-render-integration.md`.
+
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

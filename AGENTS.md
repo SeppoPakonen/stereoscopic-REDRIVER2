@@ -182,6 +182,16 @@ slice (T5.1) are **complete**:
   `SoftGame_RenderFrame` (soft window) draw, so the two wireframes match exactly — a
   geometric A/B for the projection. Run with `REDRIVER2_dev.exe -renderer soft -testcube`.
   The OBJ/MTL/PNG loaders + `ModelBuilder` + the test camera live in plan 001–005.
+- **OBJ/MTL/PNG asset chain + `-testobj` (plan 001–005, MVP)**: `obj_loader.c`
+  now loads MTL (`newmtl`/`Kd`/`map_Kd`), `model_builder.c` builds a game `MODEL`
+  (UV fix: `uv0..uv3` map quad corners 1:1), and `texture_loader.{h,c}`
+  `TextureLoader_LoadPng` loads a PNG (stb_image) → downscales to one 64×64 PSX
+  16-bit page → RGB555 → `LoadImage` into VRAM (512,256) → `GetTPage(2,0,512,256)`
+  (no CLUT). `-testobj` = `-testcube` + the chain: loads `cube.obj`/`cube.png`,
+  builds `gTestCubeModel`, uploads texture_set 127. MVP renders it to the
+  **feed** backends (soft/dx11) via `PlotFeed_SubmitModel`; the **GTE
+  `RenderModel` path still crashes** in the bypassed loop (GTE render state not
+  initialised) — that init is the deferred TODO.
 - **Standalone DX11 modules** in `src_rebuild/spike/` (the `dx11_renderer`,
   `dx11_resources`, `dx11_textures`, `dx11_shaders`, `dx11_drawcmdexec`,
   `dx11_modeladapter`, `dx11_input`, `dx11_audio`, `dx11_stereo`,

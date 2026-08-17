@@ -47,6 +47,7 @@
 #include "soft_renderer.h"
 #include "engine/obj_loader.h"
 #include "engine/model_builder.h"
+#include "engine/texture_loader.h"
 #include <math.h>
 #endif
 #include "PsyX/PsyX_render.h"
@@ -176,6 +177,14 @@ RendererId gRenderer = RENDERER_DX11;
 // single wireframe cube (for the soft-vs-psyx projection comparison).
 // Enabled via -testcube.
 int gTestCubeMode = 0;
+
+// Variant of -testcube that renders the OBJ/MTL/PNG test cube (loaded by
+// TestCube_LoadAssets) through the real RenderModel/GTE path (textured), not
+// the shared NDC wireframe. Enabled via -testobj.
+int gTestObjMode = 0;
+
+static int TestCube_LoadAssets(void); // defined later in this file
+static void TestCube_RenderObjFrame(void); // defined later in this file
 
 static int WantPause = 0;
 static PAUSEMODE PauseMode = PAUSEMODE_PAUSE;
@@ -517,6 +526,8 @@ void State_GameInit(void* param)
 		gameinit = 1;
 		NoPlayerControl = 1;
 		NewLevel = 0;
+		if (gTestObjMode)
+			TestCube_LoadAssets();
 		SetupDrawBuffers();
 		SetDispMask(1);
 		SetState(STATE_GAMELOOP);
@@ -1618,7 +1629,10 @@ static void TestCubeRenderFrame(void)
 	ClearOTagR((u_long*)current->ot, OTSIZE);
 	current->primptr = current->primtab;
 
-	DrawTestCube();
+	if (gTestObjMode)
+		TestCube_RenderObjFrame();
+	else
+		DrawTestCube();
 
 	SwapDrawBuffers();
 
@@ -2017,6 +2031,90 @@ int ObjectDrawnValue = 0;
 // [D] [T]
 // Test cube for soft renderer (loaded from OBJ).
 static MODEL* gTestCubeModel = NULL;
+
+// Resolve a file next to the exe: try common data layouts first.
+static int TestCube_FindFile(const char* name, char* out, int outSize)
+{
+	static const char* prefixes[] = { "", "data/", "DRIVER2/data/", "data/data/" };
+	for (int i = 0; i < 4; ++i)
+	{
+		snprintf(out, outSize, "%s%s", prefixes[i], name);
+		if (FileExists(out))
+			return 0;
+	}
+	snprintf(out, outSize, "%s", name);
+	return 1;
+}
+
+// Load cube.obj/cube.png from the data dir and build the test MODEL; upload the
+// PNG as texture_set 127 (16-bit, no CLUT). Returns 1 on success.
+static int TestCube_LoadAssets(void)
+{
+	char objPath[512], texPath[512];
+	ObjModel cubeObj;
+
+	if (gTestCubeModel) return 1;
+	TestCube_FindFile("cube.obj", objPath, sizeof(objPath));
+	TestCube_FindFile("cube.png", texPath, sizeof(texPath));
+	fprintf(stderr, "[testobj] load assets: obj='%s' png='%s'\n", objPath, texPath); fflush(stderr);
+
+	if (ObjLoad(objPath, &cubeObj) != 0)
+	{
+		fprintf(stderr, "[testobj] ObjLoad failed: %s\n", objPath);
+		return 0;
+	}
+	fprintf(stderr, "[testobj] obj loaded: %d verts, %d faces, %d mats\n",
+	        cubeObj.numVertices, cubeObj.numFaces, cubeObj.numMaterials); fflush(stderr);
+
+	int texSet = 127;
+	unsigned short tpage = 0;
+	int tw = 0, th = 0;
+	if (TextureLoader_LoadPng(texPath, &tpage, &tw, &th) == 0)
+	{
+		texture_pages[texSet] = tpage;   // 16-bit page -> no CLUT needed
+		fprintf(stderr, "[testobj] png loaded: %dx%d tpage=0x%04x set=%d\n", tw, th, tpage, texSet); fflush(stderr);
+	}
+	else
+	{
+		fprintf(stderr, "[testobj] TextureLoader_LoadPng failed: %s\n", texPath);
+	}
+
+	gTestCubeModel = ModelBuilder_FromObj(&cubeObj, 100.0f, texSet, 0);
+	ObjFree(&cubeObj);
+
+	if (!gTestCubeModel)
+		fprintf(stderr, "[testobj] ModelBuilder_FromObj failed\n");
+	else
+		fprintf(stderr, "[testobj] model built: %d verts, %d polys\n",
+		        gTestCubeModel->num_vertices, gTestCubeModel->num_polys); fflush(stderr);
+	return gTestCubeModel != NULL;
+}
+
+// Render the loaded OBJ cube in world space via the game path. With the feed
+// backends (soft/dx11) this emits the PlotFeed DrawCommand so the feed can show
+// it. The GTE RenderModel path is NOT used here yet: the bypassed test loop
+// never initialises the GTE render state (inv_camera_matrix/geom/compounds) that
+// RenderModel assumes, and calling it crashes (see T5 debug). Once that init is
+// provided, replace the feed call below with RenderModel(gTestCubeModel,...).
+static void TestCube_RenderObjFrame(void)
+{
+	if (!gTestCubeModel) return;
+
+	// Per-frame draw-command arena (RenderGame2 normally does this).
+	if (Renderer_IsFeedActive())
+		DrawCmd_BeginFrame();
+
+	MATRIX identity;
+	memset(&identity, 0, sizeof(identity));
+	identity.m[0][0] = identity.m[1][1] = identity.m[2][2] = 4096;
+
+	// Cube at world origin, 500 units in front of the (identity) camera.
+	VECTOR pos;
+	pos.vx = 0; pos.vy = 0; pos.vz = 500; pos.pad = 0;
+
+	if (Renderer_IsFeedActive())
+		PlotFeed_SubmitModel(gTestCubeModel, &identity, &pos, 0, 0);
+}
 
 // Compute the cube wireframe NDC edges for a fixed camera at (0,0,-camDist)
 // looking at the origin with identity rotation.
@@ -2712,6 +2810,20 @@ int redriver2_main(int argc, char** argv)
 			GameType = GAME_TAKEADRIVE;
 			SetState(STATE_GAMELAUNCH);
 		}
+		else if (!strcmp(argv[i], "-testobj"))
+		{
+			// -testobj = -testcube + OBJ/MTL/PNG integration: renders the
+			// loaded cube.obj (textured with cube.png) through the real
+			// RenderModel/GTE path instead of the shared NDC wireframe.
+			gTestCubeMode = 1;
+			gTestObjMode = 1;
+			SetFEDrawMode();
+			gInFrontend = 0;
+			AttractMode = 0;
+			gCurrentMissionNumber = 1;
+			GameType = GAME_TAKEADRIVE;
+			SetState(STATE_GAMELAUNCH);
+		}
 		else if (!strcmp(argv[i], "-renderer"))
 		{
 			if (argc - i < 2)
@@ -3006,7 +3118,10 @@ void RenderGame2(int view)
 	// the shared wireframe cube. `current`/`primptr`/`ot` are already set up by
 	// DrawGame before this call.
 	if (gTestCubeMode) {
-		DrawTestCube();
+		if (gTestObjMode)
+			TestCube_RenderObjFrame();
+		else
+			DrawTestCube();
 		return;
 	}
 

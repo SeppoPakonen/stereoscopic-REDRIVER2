@@ -3,6 +3,24 @@
 ## Goal
 Integrate all previous tasks (001–004) to render the test cube in both psyx and soft renderers.
 
+## Status (MVP, 2026-08-17)
+- DONE: `obj_loader.c` loads OBJ **+ MTL** (`newmtl`/`Kd`/`map_Kd`), resolved next
+  to the OBJ; `model_builder.c` builds the game `MODEL` (UV fix: `uv0..uv3` map
+  quad corners `v0..v3` 1:1); `texture_loader.{h,c}` `TextureLoader_LoadPng`
+  loads cube.png (stb_image) → 64×64 PSX 16-bit RGB555 page → `LoadImage` into the
+  free VRAM slot (512,256) → `GetTPage(2,0,512,256)` (no CLUT) → stored in
+  `texture_pages[127]`.
+- DONE: `-testobj` command-line variant wires `TestCube_LoadAssets()` +
+  `TestCube_RenderObjFrame()` into the `-testcube` frame loop (stably loads 8
+  verts / 12 faces / 1 material; 64×64 texture upload OK).
+- DEFERRED (TODO): the **GTE `RenderModel`** path in `TestCube_RenderObjFrame`.
+  In the bypassed test loop the GTE render state (`inv_camera_matrix`, geom offset,
+  compounds) that `RenderModel` assumes is never initialised, so calling it
+  crashes the process. MVP emits the cube to the **feed** backends
+  (soft/dx11) via `PlotFeed_SubmitModel` instead. Fix = initialise the GTE test
+  camera (inv_camera_matrix = identity, SetGeomOffset/scr_z) and call
+  `RenderModel` so the cube renders *textured* in the psyx window.
+
 ## Scope
 - Load cube.obj/cube.mtl/cube.png using loaders from 001–003
 - Build game MODEL using builder from 002

@@ -71,6 +71,11 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
   `SoftGame_RenderFrame` (soft window) — a geometric A/B for the projection.
 - [x] Clean build (`-renderer soft -testcube`) runs without crash / "0x4" / popup;
   visual confirmation of the matching wireframe is the user run.
+- [x] **OBJ/MTL/PNG chain + `-testobj` (plan 001–005, MVP)** — `obj_loader.c` MTL
+  parsing, `model_builder.c` MODEL build (UV fix), `texture_loader` PNG→64×64
+  16-bit tpage upload; `-testobj` loads assets and emits the cube to the feed
+  backends. `-renderer soft -testobj` runs stably. DEFERRED: GTE `RenderModel`
+  path (crashes in the bypassed loop until the GTE test camera is initialised).
 - [~] The OBJ/MTL/PNG loaders + `ModelBuilder` + the test camera are tracked in the
   sibling plan 001–005 docs, not under DX11-renderer/.
 
