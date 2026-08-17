@@ -183,6 +183,10 @@ int gTestCubeMode = 0;
 // the shared NDC wireframe. Enabled via -testobj.
 int gTestObjMode = 0;
 
+// -testobj sets this so RenderModel's PlotFeed branch is skipped (the feed arena
+// is not driven by the bypassed test loop; the texture comes from psyx GTE).
+int gSkipRenderFeedTest = 0;
+
 static int TestCube_LoadAssets(void); // defined later in this file
 static void TestCube_RenderObjFrame(void); // defined later in this file
 
@@ -2090,30 +2094,41 @@ static int TestCube_LoadAssets(void)
 	return gTestCubeModel != NULL;
 }
 
-// Render the loaded OBJ cube in world space via the game path. With the feed
-// backends (soft/dx11) this emits the PlotFeed DrawCommand so the feed can show
-// it. The GTE RenderModel path is NOT used here yet: the bypassed test loop
-// never initialises the GTE render state (inv_camera_matrix/geom/compounds) that
-// RenderModel assumes, and calling it crashes (see T5 debug). Once that init is
-// provided, replace the feed call below with RenderModel(gTestCubeModel,...).
+// Render the loaded OBJ cube in world space via the game path. Initialises the
+// GTE test camera (identity world->camera rotation, camera at the origin, cube
+// +Z 500 ahead) so RenderModel/PlotModelSubdivNxN can project, then draws the
+// cube textured into the psyx OT. gSkipRenderFeedTest disables RenderModel's
+// PlotFeed branch (the bypassed test loop never drives the DrawCommand feed).
+// Feed rendering of the cube is a separate follow-up.
 static void TestCube_RenderObjFrame(void)
 {
 	if (!gTestCubeModel) return;
 
-	// Per-frame draw-command arena (RenderGame2 normally does this).
-	if (Renderer_IsFeedActive())
-		DrawCmd_BeginFrame();
+	// Test camera: identity world->camera rotation, camera at origin, cube +Z.
+	memset(&inv_camera_matrix, 0, sizeof(inv_camera_matrix));
+	inv_camera_matrix.m[0][0] = 4096;
+	inv_camera_matrix.m[1][1] = 4096;
+	inv_camera_matrix.m[2][2] = 4096;
+	camera_position.vx = 0;
+	camera_position.vy = 0;
+	camera_position.vz = 0;
+
+	// Geometric projection distance (geom offset already set by SetupDrawBuffers;
+	// a larger focus distance keeps the cube in view).
+	scr_z = 500;
+
+	// The bypassed test loop does not drive the DrawCommand feed arena, so skip
+	// RenderModel's PlotFeed branch and draw textured through the psyx GTE path.
+	gSkipRenderFeedTest = 1;
 
 	MATRIX identity;
 	memset(&identity, 0, sizeof(identity));
 	identity.m[0][0] = identity.m[1][1] = identity.m[2][2] = 4096;
 
-	// Cube at world origin, 500 units in front of the (identity) camera.
 	VECTOR pos;
 	pos.vx = 0; pos.vy = 0; pos.vz = 500; pos.pad = 0;
 
-	if (Renderer_IsFeedActive())
-		PlotFeed_SubmitModel(gTestCubeModel, &identity, &pos, 0, 0);
+	RenderModel(gTestCubeModel, &identity, &pos, 0, 0, 0, 0);
 }
 
 // Compute the cube wireframe NDC edges for a fixed camera at (0,0,-camDist)

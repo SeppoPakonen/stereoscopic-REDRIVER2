@@ -1389,13 +1389,15 @@ void PlotFeed_SubmitBillboard(const VECTOR* worldPos, int orient,
 	DrawCmd_Submit(&cmd);
 }
 
+extern int gSkipRenderFeedTest;
+
 // [D] [T]
 void RenderModel(MODEL* model, MATRIX* matrix, VECTOR* pos, int zBias, int flags, int subdiv, int nrot)
 {
 	int i;
 
 #ifndef PSX
-	if (Renderer_IsFeedActive())
+	if (Renderer_IsFeedActive() && !gSkipRenderFeedTest)
 	{
 		// camera-space depth for the sort key (the renderer depth-tests opaque;
 		// this mirrors the OT bucket for later translucent use).
