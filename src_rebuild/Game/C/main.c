@@ -183,12 +183,18 @@ int gTestCubeMode = 0;
 // the shared NDC wireframe. Enabled via -testobj.
 int gTestObjMode = 0;
 
+static int gTestObjDumped = 0; // -testobj: only dump the psyx frame once
+
 // -testobj sets this so RenderModel's PlotFeed branch is skipped (the feed arena
 // is not driven by the bypassed test loop; the texture comes from psyx GTE).
 int gSkipRenderFeedTest = 0;
 
+// -testobj debug: set 1 to print emitted POLY_FT4 screen coords once.
+int gTestObjDumpVerts = 0;
+
 static int TestCube_LoadAssets(void); // defined later in this file
 static void TestCube_RenderObjFrame(void); // defined later in this file
+static void TestObj_DumpFrame(void); // defined later in this file
 
 static int WantPause = 0;
 static PAUSEMODE PauseMode = PAUSEMODE_PAUSE;
@@ -1640,6 +1646,12 @@ static void TestCubeRenderFrame(void)
 
 	SwapDrawBuffers();
 
+	// -testobj: dump the rendered frame once, before PsyX_EndScene swaps.
+	if (gTestObjMode && !gTestObjDumped) {
+		TestObj_DumpFrame();
+		gTestObjDumped = 1;
+	}
+
 #ifndef PSX
 	if (!FadingScreen)
 		PsyX_EndScene();
@@ -2104,6 +2116,17 @@ static void TestCube_RenderObjFrame(void)
 {
 	if (!gTestCubeModel) return;
 
+	// Draw a full-screen opaque black backdrop (same as DrawTestCubePsyX) so the
+	// -testobj window doesn't show stale VRAM content ("Loading configuration...").
+	{
+		POLY_F4* bg = (POLY_F4*)current->primptr;
+		setPolyF4(bg);
+		setRGB0(bg, 0, 0, 0);
+		setXYWH(bg, 0, 0, 320, SCREEN_H);
+		addPrim(current->ot + (OTSIZE - 2), bg);
+		current->primptr = (unsigned char*)(bg + 1);
+	}
+
 	// Test camera: identity world->camera rotation, camera at origin, cube +Z.
 	memset(&inv_camera_matrix, 0, sizeof(inv_camera_matrix));
 	inv_camera_matrix.m[0][0] = 4096;
@@ -2113,9 +2136,11 @@ static void TestCube_RenderObjFrame(void)
 	camera_position.vy = 0;
 	camera_position.vz = 0;
 
-	// Geometric projection distance (geom offset already set by SetupDrawBuffers;
-	// a larger focus distance keeps the cube in view).
+	// Geometric projection distance. SetGeomScreen pushes it into the GTE
+	// emulator (otherwise rtpt produces garbage SXY). The geom offset was
+	// already set by SetupDrawBuffers.
 	scr_z = 500;
+	SetGeomScreen(scr_z);
 
 	// The bypassed test loop does not drive the DrawCommand feed arena, so skip
 	// RenderModel's PlotFeed branch and draw textured through the psyx GTE path.
@@ -2126,9 +2151,81 @@ static void TestCube_RenderObjFrame(void)
 	identity.m[0][0] = identity.m[1][1] = identity.m[2][2] = 4096;
 
 	VECTOR pos;
-	pos.vx = 0; pos.vy = 0; pos.vz = 500; pos.pad = 0;
+	pos.vx = 0; pos.vy = 0; pos.vz = 500; pos.pad = 0;  // setup: camera looks down +Z
+
+	// -testobj debug: print emitted prim screen coords once (first frame only).
+	if (!gTestObjDumped)
+		gTestObjDumpVerts = 1;
 
 	RenderModel(gTestCubeModel, &identity, &pos, 0, 0, 0, 0);
+
+	// Report how many primitive bytes were written into the OT (diagnose a
+	// black screen: 0 means RenderModel emitted nothing at all).
+	if (!gTestObjDumped) {
+		int primBytes = (int)((char*)current->primptr - (char*)current->primtab);
+		fprintf(stderr, "[testobj] rof: primBytes=%d\n", primBytes); fflush(stderr);
+	}
+}
+
+// -testobj debug: read the psyx window back (BEFORE PsyX_EndScene swaps) and
+// write testobj_frame.bmp + report non-black pixel count, so a truly black
+// screen can be distinguished from a rendered-but-mis-projected cube.
+static void TestObj_DumpFrame(void)
+{
+	int w, h;
+	PsyX_GetScreenSize(&w, &h);
+	if (w <= 0 || h <= 0) {
+		fprintf(stderr, "[testobj] dump: bad screen %dx%d\n", w, h); fflush(stderr);
+		return;
+	}
+
+	unsigned char* px  = (unsigned char*)malloc((size_t)w * h * 4);
+	unsigned char* bgr = (unsigned char*)malloc((size_t)w * h * 3);
+	if (!px || !bgr) { free(px); free(bgr); return; }
+	glReadPixels(0, 0, w, h, GL_BGRA, GL_UNSIGNED_BYTE, px);
+
+	long nonblack = 0;
+	for (int y = 0; y < h; ++y) {
+		const unsigned char* src = px + (size_t)(h - 1 - y) * w * 4; // GL row -> top-down
+		unsigned char* dst = bgr + (size_t)y * w * 3;
+		for (int x = 0; x < w; ++x) {
+			unsigned char B = src[x * 4 + 0], G = src[x * 4 + 1], R = src[x * 4 + 2];
+			dst[x * 3 + 0] = B; dst[x * 3 + 1] = G; dst[x * 3 + 2] = R;
+			if (B || G || R) nonblack++;
+		}
+	}
+
+	FILE* f = fopen("testobj_frame.bmp", "wb");
+	if (f) {
+		int rowSize = (w * 3 + 3) & ~3;
+		int dataSize = rowSize * h;
+		unsigned int fileSize = 54 + (unsigned int)dataSize;
+		unsigned char hdr[54] = { 0 };
+		hdr[0]='B'; hdr[1]='M';
+		hdr[2]=(unsigned char)(fileSize&0xFF); hdr[3]=(unsigned char)((fileSize>>8)&0xFF);
+		hdr[4]=(unsigned char)((fileSize>>16)&0xFF); hdr[5]=(unsigned char)((fileSize>>24)&0xFF);
+		hdr[10]=54; hdr[14]=40;
+		hdr[18]=(unsigned char)(w&0xFF); hdr[19]=(unsigned char)((w>>8)&0xFF);
+		hdr[20]=(unsigned char)((w>>16)&0xFF); hdr[21]=(unsigned char)((w>>24)&0xFF);
+		hdr[22]=(unsigned char)(h&0xFF); hdr[23]=(unsigned char)((h>>8)&0xFF);
+		hdr[24]=(unsigned char)((h>>16)&0xFF); hdr[25]=(unsigned char)((h>>24)&0xFF);
+		hdr[26]=1; hdr[28]=24;
+		fwrite(hdr, 1, 54, f);
+		unsigned char* pad = (unsigned char*)calloc((size_t)(rowSize - w * 3), 1);
+		for (int y = h - 1; y >= 0; --y) {
+			fwrite(bgr + (size_t)y * w * 3, 1, (size_t)w * 3, f);
+			if (rowSize > w * 3) fwrite(pad, 1, (size_t)(rowSize - w * 3), f);
+		}
+		free(pad);
+		fclose(f);
+		fprintf(stderr, "[testobj] dump: %dx%d nonblack=%ld/%ld -> testobj_frame.bmp\n",
+		        w, h, nonblack, (long)w * h); fflush(stderr);
+	} else {
+		fprintf(stderr, "[testobj] dump: nonblack=%ld (open bmp failed)\n", nonblack); fflush(stderr);
+	}
+
+	free(px);
+	free(bgr);
 }
 
 // Compute the cube wireframe NDC edges for a fixed camera at (0,0,-camDist)

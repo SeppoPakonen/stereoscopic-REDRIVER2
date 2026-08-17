@@ -39,6 +39,8 @@ MATRIX identity =
 	{ 0, 0, 0 }
 };
 
+extern int gTestObjDumpVerts;
+
 int PolySizes[56] = {
 	8,  12, 16, 24,
 	20, 20, 28, 32,
@@ -966,6 +968,15 @@ void PlotBuildingModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 				*(ushort*)&prims->u2 = uv3;
 				*(ushort*)&prims->u3 = uv2;
 
+				if (gTestObjDumpVerts) {
+					static int gvN = 0;
+					fprintf(stderr, "[gv] p%d=(%d,%d) (%d,%d) (%d,%d) (%d,%d)\n",
+					        gvN, prims->x0, prims->y0, prims->x1, prims->y1,
+					        prims->x2, prims->y2, prims->x3, prims->y3);
+					fflush(stderr);
+					if (++gvN >= 8) gTestObjDumpVerts = 0;
+				}
+
 				addPrim(pc->ot + (Z >> 1), prims);
 
 				pc->primptr += sizeof(POLY_FT4);
@@ -1221,6 +1232,15 @@ void PlotModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 				*(ushort*)&prims->u2 = uv3;
 				*(ushort*)&prims->u3 = uv2;
 
+				if (gTestObjDumpVerts) {
+					static int gvN = 0;
+					fprintf(stderr, "[gv] p%d=(%d,%d) (%d,%d) (%d,%d) (%d,%d)\n",
+					        gvN, prims->x0, prims->y0, prims->x1, prims->y1,
+					        prims->x2, prims->y2, prims->x3, prims->y3);
+					fflush(stderr);
+					if (++gvN >= 8) gTestObjDumpVerts = 0;
+				}
+
 				addPrim(pc->ot + (Z >> 1), prims);
 
 				pc->primptr += sizeof(POLY_FT4);
@@ -1390,6 +1410,10 @@ void PlotFeed_SubmitBillboard(const VECTOR* worldPos, int orient,
 }
 
 extern int gSkipRenderFeedTest;
+
+// -testobj debug: when non-zero, PlotModelSubdivNxN prints the screen coords of
+// the first few emitted POLY_FT4 prims (then clears itself).
+extern int gTestObjDumpVerts;
 
 // [D] [T]
 void RenderModel(MODEL* model, MATRIX* matrix, VECTOR* pos, int zBias, int flags, int subdiv, int nrot)
