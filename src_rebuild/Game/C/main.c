@@ -2072,6 +2072,19 @@ static void DrawTestCubePsyX(void)
 	PsyX_GetScreenSize(&screenX, &screenY);
 
 	// PsyX renders into the 320x240 offscreen; the window is scaled up by GL.
+	// Opaque black full-screen backdrop drawn FIRST (deep OT slot = farthest, so
+	// it renders before the wireframe). -testcube never clears the backbuffer, so
+	// without this every displayed buffer leaks whatever was left in VRAM when
+	// the mode started (the "Loading configuration..." screen, a smaller-scale
+	// ghost from before the window size applied), which flickers across the two
+	// alternating buffers as the handful of "stale frames".
+	POLY_F4* bg = (POLY_F4*)current->primptr;
+	setPolyF4(bg);
+	setRGB0(bg, 0, 0, 0);
+	setXYWH(bg, 0, 0, 320, SCREEN_H);
+	addPrim(current->ot + (OTSIZE - 2), bg);
+	current->primptr = (unsigned char*)(bg + 1);
+
 	int ox = 320, oy = 240;   // offscreen resolution
 	LINE_F2* line = (LINE_F2*)current->primptr;
 	for (int e = 0; e < TEST_CUBE_EDGES; ++e) {
