@@ -80,7 +80,7 @@ void DrawThrownBombs(void)
 			pos.vz = bomb->position.vz;
 
 #ifndef PSX
-			if (Renderer_IsDX11())
+			if (Renderer_IsFeedActive())
 			{
 				// T5.2 effect feed: submit the bomb MODEL in world space.
 				int z = FIXEDH(inv_camera_matrix.m[0][2] * (pos.vx - camera_position.vx)

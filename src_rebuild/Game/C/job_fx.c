@@ -251,7 +251,7 @@ void DrawExplosion(int time, VECTOR position, int hscale, int rscale)
 	sf2 = FIXEDH(time * (10000 - time) * 2) + 12;
 
 #ifndef PSX
-	if (Renderer_IsDX11())
+	if (Renderer_IsFeedActive())
 	{
 		// T5.2 addPrim single-primitive feed: submit the explosion as a
 		// camera-facing billboard (smoke_texture, semi-transparent) at the world

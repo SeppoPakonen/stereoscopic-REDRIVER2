@@ -989,7 +989,7 @@ void DrawSkyDome(void)
 	PlotHorizonMDL(modelpointers[3], HorizonLookup[GameLevel][2], &skycolor);
 	PlotHorizonMDL(modelpointers[1], HorizonLookup[GameLevel][3], &skycolor);
 
-	if (Renderer_IsDX11())
+	if (Renderer_IsFeedActive())
 	{
 		// T5.2 sky feed: submit the 4 horizon MODELS as world-space DrawCommands
 		// (camera-anchored; the renderer textures their polys from the sky tables

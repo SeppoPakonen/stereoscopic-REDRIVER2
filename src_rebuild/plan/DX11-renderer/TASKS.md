@@ -59,6 +59,21 @@ Renderer selection: `-renderer dx11` (DEFAULT) / `-renderer psyx` (legacy) /
 - [x] **T5.1** In-game renderer integration (DrawCommand → per-eye → composite) — [T5.1](T5.1-in-game-renderer-integration.md)
 - [x] **T5.2** Plot-function feed rewiring (game geometry → DrawCommand list) — [T5.2](T5.2-plot-function-feed-rewiring.md) *(terrain/tile core + DrawGame dx11 consumer + texture baking + in-game A/B verified + cars body/wheels + MODEL sprites/effects + sky + addPrim single-primitive effects + sprite-shadows submitted: [core](T5.2-terrain-tile-core.md), [consumer](T5.2-dx11-consumer-drawgame.md), [texture](T5.2-feed-texture-baking.md), [A/B](T5.2-ab-verify-in-game.md), [cars](T5.2-car-feed.md), [sprite/sky/effects](T5.2-sprite-sky-effects.md))*
 
+## Software renderer / test-cube slice (projection A/B)
+
+- [x] **`-renderer soft`** — `spike/soft_renderer.{h,c}` CPU rasterizer consuming the
+  `DrawCommand` feed (`SoftRenderer_RenderNdcEdges` / `RenderDebugBox` / `RenderFeed`),
+  `RENDERER_SOFT` + `Renderer_IsSoft()` + `Renderer_IsFeedActive()` in `renderer.h`.
+- [x] **`-testcube`** — `gTestCubeMode` stand-alone mono mode bypassing the level/
+  mission/simulation system (no cars/pedestrians/music), jumping straight to
+  `TestCubeRenderFrame()`; `TestCube_WireCompute` produces one shared NDC edge table
+  rendered identically by `DrawTestCubePsyX` (main window `LINE_F2`) and
+  `SoftGame_RenderFrame` (soft window) — a geometric A/B for the projection.
+- [x] Clean build (`-renderer soft -testcube`) runs without crash / "0x4" / popup;
+  visual confirmation of the matching wireframe is the user run.
+- [~] The OBJ/MTL/PNG loaders + `ModelBuilder` + the test camera are tracked in the
+  sibling plan 001–005 docs, not under DX11-renderer/.
+
 ## Out of scope (for now)
 
 - Full PGXP-quality 3D reconstruction / texture perspective correction.

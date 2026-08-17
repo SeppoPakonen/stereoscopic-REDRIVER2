@@ -206,7 +206,7 @@ void addSubdivSpriteShadow(POLYFT4* src, SVECTOR* verts, int z, const VECTOR* wo
 	plotContext.ot -= 28;
 
 #ifndef PSX
-	if (Renderer_IsDX11())
+	if (Renderer_IsFeedActive())
 		PlotFeed_SubmitSpriteShadow(src, verts, worldPos, z);
 #endif
 }
@@ -298,7 +298,7 @@ void DrawSprites(PACKED_CELL_OBJECT** sprites, int numFound)
 		z = Apply_InvCameraMatrixAndSetMatrix((VECTOR_NOPAD*)plotContext.scribble, (MATRIX2*)&face_camera);
 
 #ifndef PSX
-		if (Renderer_IsDX11())
+		if (Renderer_IsFeedActive())
 		{
 			// T5.2 sprite feed: submit the billboard MODEL in world space
 			// (camera-facing face_camera_work rotation, nearCell-resolved pos).
@@ -1395,7 +1395,7 @@ void RenderModel(MODEL* model, MATRIX* matrix, VECTOR* pos, int zBias, int flags
 	int i;
 
 #ifndef PSX
-	if (Renderer_IsDX11())
+	if (Renderer_IsFeedActive())
 	{
 		// camera-space depth for the sort key (the renderer depth-tests opaque;
 		// this mirrors the OT bucket for later translucent use).

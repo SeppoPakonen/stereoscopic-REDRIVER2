@@ -305,7 +305,7 @@ void DrawTILES(PACKED_CELL_OBJECT** tiles, int tile_amount)
 		}
 
 #ifndef PSX
-		if (Renderer_IsDX11())
+		if (Renderer_IsFeedActive())
 		{
 			// T5.2 terrain/tile feed: submit a world-space DrawCommand for the
 			// selected LOD model (world rotation = matrixtable[yang], position =

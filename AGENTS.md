@@ -166,9 +166,22 @@ backend kept selectable. Phase 4 (T4.1–T4.6) + the in-game renderer integratio
 slice (T5.1) are **complete**:
 
 - **Multi-renderer selection**: `-renderer dx11` (default) / `-renderer psyx`
-  (legacy) / `-renderer gl` (modern). All three resolve in `renderer.h`
-  (`Renderer_FromName`/`IsDX11`/`IsPsyX`/`IsGL`) and genuinely dispatch in `DrawGame`
-  (`main.c`), probing `Dx11Renderer_Available()` / `GlRenderer_Available()`.
+  (legacy) / `-renderer gl` (modern) / `-renderer soft` (debug software
+  rasterizer). All resolve in `renderer.h` (`Renderer_FromName`/`IsDX11`/`IsPsyX`/
+  `IsGL`/`IsSoft`, plus `RENDERER_SOFT = 3` and `Renderer_IsFeedActive()` =
+  `DX11 || SOFT` for plot-function feed population) and genuinely dispatch in
+  `DrawGame` (`main.c`), probing `Dx11Renderer_Available()` /
+  `GlRenderer_Available()`.
+- **Software renderer + `-testcube` (stand-alone mono mode)**: `spike/soft_renderer.{h,c}`
+  is a CPU rasterizer (640x480 window, `SoftRenderer_RenderNdcEdges` wireframe +
+  `RenderDebugBox`/`RenderFeed` probes over the same `DrawCommand[]` feed). The
+  `-testcube` mode (`gTestCubeMode`, main.c) bypasses the whole level/mission/
+  simulation system (no cars/pedestrians/music) and jumps straight to
+  `TestCubeRenderFrame()`; `TestCube_WireCompute` produces one shared NDC edge
+  table that both `DrawTestCubePsyX` (`LINE_F2`, main window) and
+  `SoftGame_RenderFrame` (soft window) draw, so the two wireframes match exactly — a
+  geometric A/B for the projection. Run with `REDRIVER2_dev.exe -renderer soft -testcube`.
+  The OBJ/MTL/PNG loaders + `ModelBuilder` + the test camera live in plan 001–005.
 - **Standalone DX11 modules** in `src_rebuild/spike/` (the `dx11_renderer`,
   `dx11_resources`, `dx11_textures`, `dx11_shaders`, `dx11_drawcmdexec`,
   `dx11_modeladapter`, `dx11_input`, `dx11_audio`, `dx11_stereo`,
@@ -292,15 +305,18 @@ Runtime DLLs beside the exe: `libgcc_s_dw2-1.dll`, `libstdc++-6.dll`,
    verification + the car body/wheels feed + the MODEL-based sprites/effects
    feed + the sky feed + the addPrim single-primitive effects feed + the
    sprite-shadow feed + the pitch/roll (full `inv_camera_matrix`-basis) camera.
-2. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
+2. Confirm `-renderer soft -testcube` visually (user run): the PsyX/SDL window and
+   the 640x480 soft window must show the identical cube wireframe. This is the
+   geometric projection A/B that isolates the DX11 "slices from center" corruption.
+3. GL composite color modes (anaglyph / interlaced / polarized / checkerboard)
    + split-screen.
-3. Advanced quality tuning / performance optimization for stereo rendering.
-4. Comprehensive regression testing.
-5. User documentation.
+4. Advanced quality tuning / performance optimization for stereo rendering.
+5. Comprehensive regression testing.
+6. User documentation.
 
 ---
 
-**Last Updated**: 2026-08-12
+**Last Updated**: 2026-08-17
 **Phase**: 4 (Integration & cleanup — renderer rewrite)
 **Status**: Phase 4 done (T4.1–T4.6) + T5.1 renderer integration + T5.2
 terrain/tile feed + DrawGame dx11 consumer (A/B) + in-game A/B verified
@@ -310,6 +326,8 @@ effects feed + sky feed (skytpage/skyclut/skytexuv, headless SKY_FEED test
 PASS) + addPrim single-primitive effects feed (billboard mesh==NULL+material
 path, headless BILLBOARD_FEED test PASS) + sprite-shadow feed
 (addSubdivSpriteShadow as a ground billboard) + pitch/roll camera
-(full inv_camera_matrix basis, headless BASIS_FEED test PASS); launcher + stereo
+(full inv_camera_matrix basis, headless BASIS_FEED test PASS) + software
+renderer + `-testcube` stand-alone mono mode (matching psyx/soft wireframe,
+built + clean-run verified); launcher + stereo
 GUI working, DX11 + modern GL backends selectable, mono/per-eye/stereo-composite
 A/B-verified

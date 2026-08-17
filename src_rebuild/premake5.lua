@@ -274,6 +274,7 @@ project "REDRIVER2"
             "spike/dx11_composite.h", "spike/dx11_composite.c",
             "spike/dx11_gamefeed.h", "spike/dx11_gamefeed.c",
             "spike/gl_renderer.h", "spike/gl_renderer.c",
+            "spike/soft_renderer.h", "spike/soft_renderer.c",
         }
 
         includedirs { 

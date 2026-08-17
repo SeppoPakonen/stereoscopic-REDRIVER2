@@ -550,5 +550,51 @@ quad (the `m*m` subdivision is lost). Verified by build-link + inspection.
 Deferred: the real in-game visual A/B vs `-renderer psyx` (user run). Full
 detail: `T5.2-sprite-sky-effects.md`.
 
+**Software renderer + `-testcube` stand-alone mono mode:** a software-renderer
+debug slice + a self-contained cube-mode that bypass the whole
+level/mission/simulation system, used to A/B the projection geometrically
+(matching wireframe between the psyx main window and the soft window).
+- **`spike/soft_renderer.{h,c}`** — `SoftRenderer`: a simple CPU rasterizer
+  (640x480 window, Bresenham `DrawLine` + filled triangles) that consumes the
+  same `DrawCommand[]` feed as the DX11 path. Reusable probes:
+  `SoftRenderer_Create` / `SoftRenderer_Destroy`,
+  `SoftRenderer_RenderDebugBox` (prints the 8 box corners at every pipeline
+  stage + rasterizes), `SoftRenderer_RenderFeed` (render all feed commands,
+  optional per-command transform log to a file), and
+  `SoftRenderer_RenderNdcEdges` (draw a shared NDC edge table as a white-on-black
+  wireframe — this is what makes the soft window pixel-match the psyx `LINE_F2`
+  wireframe).
+- **`RENDERER_SOFT = 3`** + `Renderer_FromName("soft")` / `Renderer_IsSoft()` /
+  `Renderer_ToName`, and **`Renderer_IsFeedActive()`** =
+  `RENDERER_DX11 || RENDERER_SOFT` (renderer.h) — the plot functions populate
+  the `DrawCommand` feed whenever the feed is consumed, soft included (fixes the
+  earlier bug where the soft window showed nothing before the camera/level init).
+- **`-testcube`** (main.c arg parse ~line 2687) — out-of-band mode enabled by
+  `gTestCubeMode` (main.c:178). Sets `GAME_TAKEADRIVE` +
+  `SetState(STATE_GAMELAUNCH)`; `State_GameInit`'s gTestCubeMode branch
+  (`gameinit=1; NoPlayerControl=1; NewLevel=0; SetupDrawBuffers(); SetDispMask(1);
+  SetState(STATE_GAMELOOP);`) and `State_GameLoop` jump straight to
+  `TestCubeRenderFrame()` with **no level/mission/simulation, no cars, no
+  pedestrians, no music** (`InitMusic` skipped under `!gTestCubeMode`),
+  `GetRandomChase()` skipped, stereo forced mono.
+- **`TestCubeRenderFrame()`** (main.c) — the `-testcube` frame loop:
+  `ClearOTagR(current->ot, OTSIZE)` + `current->primptr = current->primtab`
+  (the `0x4` crash fix — the OT was uninitialized before), `DrawTestCube()`,
+  `SwapDrawBuffers()`, `PsyX_EndScene()`, and under `RENDERER_SOFT`
+  `SoftGame_RenderFrame()`.
+- **Shared wireframe, one source of truth** — `TestCube_WireCompute(camDist,
+  cubeScale)` (main.c) computes the 12 cube edges' NDC endpoints into
+  `gTestEdgeNdc[12][4]` + `gTestEdgeVisible[12]` with an explicit simple row-vector
+  perspective (fovV=60°, f=1/tan(fovV/2), camera at (0,0,-camDist) identity —
+  deliberately NOT the game's GTE projection, so both renderers match exactly).
+  `DrawTestCubePsyX` draws those NDC edges as white `LINE_F2` (scaled NDC→320x240
+  offscreen, y flip) in the PsyX main window; `SoftGame_RenderFrame` →
+  `SoftRenderer_RenderNdcEdges` draws the **same** table into the soft window.
+- Runtime: `REDRIVER2_dev.exe -renderer soft -testcube` opens the PsyX/SDL window
+  (white cube wireframe on black) + the `640x480` soft window (same wireframe).
+  Verified by build-link + a clean run (no crash, no "command line arguments"
+  popup, no stderr; loop runs end-to-end). The OBJ/MTL/PNG loaders +
+  `ModelBuilder` and the test camera live in plan 001–005.
+
 Each task's `T1.n-*.md` file documents the module's API, verification outputs
 and the bugs found/fixed.

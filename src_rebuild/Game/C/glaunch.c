@@ -542,7 +542,8 @@ void State_LaunchGame(void* param)
 
 	quick_replay = 0;
 
-	if (gLoadedReplay == 0)
+	extern int gTestCubeMode;
+	if (gLoadedReplay == 0 && !gTestCubeMode)
 		GetRandomChase();
 
 	if (CurrentGameMode == GAMEMODE_DIRECTOR)

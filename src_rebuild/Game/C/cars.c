@@ -822,7 +822,7 @@ void DrawCarWheels(CAR_DATA *cp, MATRIX *RearMatrix, VECTOR *pos, int zclip)
 		sWheelPos.vy = (-wheelSize - wheelDisp->vy) - wheel->susCompression + 14;
 
 #ifndef PSX
-		if (Renderer_IsDX11())
+		if (Renderer_IsFeedActive())
 		{
 			// T5.2 car feed: submit the wheel MODEL in world space (car rot +
 			// steer for the front wheels, placed at rot*sWheelPos + car pos).
@@ -1631,7 +1631,7 @@ void DrawCar(CAR_DATA* cp, int view)
 		CarModelPtr->nlist = gTempCarVertDump[cp->id];
 
 #ifndef PSX
-		if (Renderer_IsDX11())
+		if (Renderer_IsFeedActive())
 		{
 			// T5.2 car feed: submit the body CAR_MODEL in world space (dented
 			// vlist, civ_clut palette). Legacy GTE path kept in parallel.
@@ -1661,7 +1661,7 @@ void DrawCar(CAR_DATA* cp, int view)
 		gTempCarUVPtr = gTempLDCarUVDump[cp->id];
 
 #ifndef PSX
-		if (Renderer_IsDX11())
+		if (Renderer_IsFeedActive())
 		{
 			// T5.2 car feed: low-LOD body in world space (no wheels at this LOD).
 			int z = FIXEDH(inv_camera_matrix.m[0][2] * (worldPos.vx - camera_position.vx)

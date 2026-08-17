@@ -380,7 +380,7 @@ void DrawTyreTracks(void)
 					}
 
 #ifndef PSX
-					if (Renderer_IsDX11())
+					if (Renderer_IsFeedActive())
 					{
 						// T5.2 addPrim single-primitive feed: submit the track
 						// quad as a world-ground billboard (gTyreTexture,

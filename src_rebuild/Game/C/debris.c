@@ -1257,7 +1257,7 @@ void DrawSmashable_sprites(void)
 			pos.vz = dam->cop.pos.vz;
 
 #ifndef PSX
-			if (Renderer_IsDX11())
+			if (Renderer_IsFeedActive())
 			{
 				// T5.2 effect feed: submit the smashable MODEL in world space.
 				int z = FIXEDH(inv_camera_matrix.m[0][2] * (pos.vx - camera_position.vx)
@@ -3025,7 +3025,7 @@ void DisplayDebris(DEBRIS *debris, char type)
 	debrisvec.vz = debris->position.vz - camera_position.vz;
 
 #ifndef PSX
-	if (Renderer_IsDX11())
+	if (Renderer_IsFeedActive())
 	{
 		// T5.2 addPrim single-primitive feed: submit the debris as a small
 		// camera-facing billboard (litter/debris texture, semi-transparent) at
@@ -3174,7 +3174,7 @@ void DisplaySmoke(SMOKE* smoke)
 		return;
 
 #ifndef PSX
-	if (Renderer_IsDX11())
+	if (Renderer_IsFeedActive())
 	{
 		// T5.2 addPrim single-primitive feed: submit the smoke puff as a
 		// camera-facing billboard (smoke_texture, semi-transparent) at the
@@ -3793,7 +3793,7 @@ void DrawRainDrops(void)
 		v.vz = RainPtr->position.vz - camera_position.vz;
 
 #ifndef PSX
-		if (Renderer_IsDX11())
+		if (Renderer_IsFeedActive())
 		{
 			// T5.2 addPrim single-primitive feed: submit each rain streak as a
 			// thin camera-facing billboard (light_texture, semi-transparent) at

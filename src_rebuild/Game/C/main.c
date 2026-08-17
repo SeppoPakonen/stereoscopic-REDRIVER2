@@ -44,6 +44,9 @@
 #include "dx11_renderer.h"
 #include "gl_renderer.h"
 #include "dx11_gamefeed.h"
+#include "soft_renderer.h"
+#include "engine/obj_loader.h"
+#include "engine/model_builder.h"
 #include <math.h>
 #endif
 #include "PsyX/PsyX_render.h"
@@ -72,8 +75,13 @@
 #include "state.h"
 #include "cutrecorder.h"
 
-// File-based logging for debugging stereo rendering
+// File-based logging for debugging stereo rendering. Only active with
+// `-iterlog` (gStereoIterLogEnabled) — otherwise a no-op, so normal runs are
+// not slowed by per-frame console writes (the DrawGame ENTRY / Stereo check
+// logs fire every frame).
 static void StereoDebugLog(const char* format, ...) {
+	if (!gStereoIterLogEnabled)
+		return;
 	FILE* fp = fopen("stereo_debug.log", "a");
 	if (!fp) return;
 	va_list args;
@@ -163,6 +171,11 @@ int FrameCnt = 0;
 // Active renderer backend, chosen once at startup from -renderer <name>.
 // Defaults to the DX11 backend (see renderer.h).
 RendererId gRenderer = RENDERER_DX11;
+
+// Test-cube mode: bypasses the whole level/mission system and renders only a
+// single wireframe cube (for the soft-vs-psyx projection comparison).
+// Enabled via -testcube.
+int gTestCubeMode = 0;
 
 static int WantPause = 0;
 static PAUSEMODE PauseMode = PAUSEMODE_PAUSE;
@@ -496,6 +509,20 @@ void State_GameInit(void* param)
 	int i, musicType;
 	char padid;
 
+	// Test-cube mode: bypass the entire level/mission loading. We still set up
+	// the draw buffers so the STATE_GAMELOOP test-cube render loop can
+	// DrawOTag/SwapDrawBuffers correctly, then jump straight to GAMELOOP.
+	if (gTestCubeMode)
+	{
+		gameinit = 1;
+		NoPlayerControl = 1;
+		NewLevel = 0;
+		SetupDrawBuffers();
+		SetDispMask(1);
+		SetState(STATE_GAMELOOP);
+		return;
+	}
+
 	if (NewLevel)
 	{
 #if USE_CRT_MALLOC
@@ -622,7 +649,8 @@ void State_GameInit(void* param)
 			musicType = 7;
 	}
 
-	InitMusic(musicType);
+	if (!gTestCubeMode)
+		InitMusic(musicType);
 
 	if (NewLevel == 0)
 	{
@@ -1578,10 +1606,46 @@ void CheckForPause(void)
 
 int gMultiStep = 0;
 
+static void DrawTestCube(void);
+static void SoftGame_RenderFrame(void);
+
+// [D] [T]
+// Render one mono test-cube frame (standalone, no level/simulation). Draws the
+// shared wireframe into current->ot, swaps/draws the buffers, presents, and
+// updates the soft window (which draws the same NDC edges).
+static void TestCubeRenderFrame(void)
+{
+	ClearOTagR((u_long*)current->ot, OTSIZE);
+	current->primptr = current->primtab;
+
+	DrawTestCube();
+
+	SwapDrawBuffers();
+
+#ifndef PSX
+	if (!FadingScreen)
+		PsyX_EndScene();
+
+#if defined(_WIN32)
+	if (Renderer_IsSoft())
+		SoftGame_RenderFrame();
+#endif
+#endif
+
+	FrameCnt++;
+}
+
 // [D] [T]
 void State_GameLoop(void* param)
 {
 	int cnt;
+
+	// Test-cube mode: standalone mono render loop, no mission/level/simulation.
+	if (gTestCubeMode)
+	{
+		TestCubeRenderFrame();
+		return;
+	}
 
 	if (gSkipInGameCutscene)
 	{
@@ -1720,13 +1784,18 @@ static int Dx11Game_TexResolve(void* user, unsigned char set, unsigned char id, 
 // Perspective RH projection (row-vector, column-major) — same as the T5.1 harness.
 static void Dx11Game_MatPerspectiveRH(float fovY, float aspect, float zn, float zf, float m[4][4])
 {
+	// Row-vector RH perspective: clip = pos * M. The perspective divide term
+	// must be in m[2][3] (= -1, giving clip.w = -pos.z). The near-plane depth
+	// offset goes in m[3][2] (= zn*zf/(zn-zf)). Placing them the other way
+	// around makes clip.w scale with zn, breaking the perspective divide for
+	// any near != 1.
 	memset(m, 0, 16 * sizeof(float));
 	float f = 1.0f / tanf(fovY * 0.5f);
 	m[0][0] = f / aspect;
 	m[1][1] = f;
 	m[2][2] = zf / (zn - zf);
-	m[2][3] = zn * zf / (zn - zf);
-	m[3][2] = -1.0f;
+	m[2][3] = -1.0f;
+	m[3][2] = zn * zf / (zn - zf);
 }
 
 static void Dx11Game_RenderFrame(void)
@@ -1754,6 +1823,15 @@ static void Dx11Game_RenderFrame(void)
 	// and roll (not just yaw). The +yaw pi alignment is subsumed by using the
 	// actual rotation matrix.
 	float camPos[3] = { (float)camera_position.vx, (float)camera_position.vy, (float)camera_position.vz };
+	// Full camera orientation (yaw + pitch + roll) from the game's world->view
+	// rotation inv_camera_matrix. Its rows are the camera's right / up / forward
+	// axes in world space. The aspect horizontal scale (the game pre-multiplies
+	// inv_camera_matrix by the aspect matrix) is normalized out per row — the DX11
+	// projection applies the PSX aspect compensation instead. The DX11 view's
+	// right / -forward are the NEGATIVE of the game's right / forward (a 180deg
+	// yaw turn, matching the yaw-only path's +pi): the game camera looks down
+	// +camera-z, the DX11 projection looks down -view-z. Negating rows 0 and 2
+	// (not up) reproduces the proven yaw-only basis for the full orientation.
 	float viewBasis[3][3];
 	{
 		float invRows[3][3] = {
@@ -1765,17 +1843,26 @@ static void Dx11Game_RenderFrame(void)
 		{
 			float len = sqrtf(invRows[r][0]*invRows[r][0] + invRows[r][1]*invRows[r][1] + invRows[r][2]*invRows[r][2]);
 			if (len < 1e-6f) len = 1.0f;
-			viewBasis[r][0] = invRows[r][0] / len;
-			viewBasis[r][1] = invRows[r][1] / len;
-			viewBasis[r][2] = invRows[r][2] / len;
+			float s = (r == 1) ? 1.0f : -1.0f;
+			viewBasis[r][0] = s * invRows[r][0] / len;
+			viewBasis[r][1] = s * invRows[r][1] / len;
+			viewBasis[r][2] = s * invRows[r][2] / len;
 		}
 	}
 
 	// Projection from the game's FrAng (horizontal half-FOV, game angle units).
 	float fovH = (float)FrAng * (6.2831853f / 4096.0f);
 	float fovV = 2.0f * atanf(tanf(fovH) * (240.0f / 320.0f));
+	// The PSX pre-multiplies the camera-space X by the aspect matrix (1.6x =
+	// 6553/4096) BEFORE projecting with fovH. The DX11 view does NOT apply that
+	// scale (it normalizes the aspect out of the camera basis), so to match the
+	// game's screen output the projection aspect must be the screen aspect
+	// DIVIDED by 1.6 (else the scene is 1.6x narrower, compressing the sides
+	// toward the center). Near plane can be small because the projection now
+	// has m[2][3]=-1 (correct perspective divide independent of near).
 	float proj[4][4];
-	Dx11Game_MatPerspectiveRH(fovV, 320.0f / 240.0f, 1.0f, 200000.0f, proj);
+	Dx11Game_MatPerspectiveRH(fovV, (320.0f / 240.0f) / (6553.0f / 4096.0f),
+	                          1.0f, 200000.0f, proj);
 
 	// Sky texture tables (game's sky.c): the horizon MODEL's polys are textured
 	// per-poly from these via HorizonTextures[horizOffset + polyIndex].
@@ -1798,24 +1885,242 @@ static void Dx11Game_RenderFrame(void)
 	                         NULL /*bmpOut*/,
 	                         NULL /*customView*/,
 	                         (const float(*)[3])viewBasis /*full camera basis*/);
+
+	// DEBUG: print camera/basis/projection and a few tile samples on first frame
+	{
+		static int debugFrame = 0;
+		if (debugFrame < 3) {
+			printf("\n=== DX11 RENDER FRAME %d (num cmds=%d) ===\n", debugFrame, num);
+			printf("camPos = (%.2f, %.2f, %.2f)\n", camPos[0], camPos[1], camPos[2]);
+			printf("viewBasis[0] (right)  = (%.6f, %.6f, %.6f)\n", viewBasis[0][0], viewBasis[0][1], viewBasis[0][2]);
+			printf("viewBasis[1] (up)     = (%.6f, %.6f, %.6f)\n", viewBasis[1][0], viewBasis[1][1], viewBasis[1][2]);
+			printf("viewBasis[2] (negFwd) = (%.6f, %.6f, %.6f)\n", viewBasis[2][0], viewBasis[2][1], viewBasis[2][2]);
+			printf("proj[0][0]=%.4f proj[1][1]=%.4f proj[2][2]=%.6f proj[2][3]=%.4f proj[3][2]=%.6f\n",
+			       proj[0][0], proj[1][1], proj[2][2], proj[2][3], proj[3][2]);
+			// Print first 5 tile draw commands (world position + sort key)
+			const DrawCommand* cmds = DrawCmd_Data();
+			int nSample = (num < 5) ? num : 5;
+			for (int i = 0; i < nSample; i++) {
+				printf("  cmd[%d]: world.t=(%.1f, %.1f, %.1f) sortKey=%d flags=0x%x\n",
+				       i, (float)cmds[i].world.t[0], (float)cmds[i].world.t[1], (float)cmds[i].world.t[2],
+				       cmds[i].sortKey, cmds[i].flags);
+			}
+			// Compute view-space z for the first tile (to check near-plane clipping)
+			if (num > 0) {
+				float worldX = (float)cmds[0].world.t[0] - camPos[0];
+				float worldY = (float)cmds[0].world.t[1] - camPos[1];
+				float worldZ = (float)cmds[0].world.t[2] - camPos[2];
+				// view.z = negFwd . (world - cam)
+				float viewZ = viewBasis[2][0]*worldX + viewBasis[2][1]*worldY + viewBasis[2][2]*worldZ;
+				float clipW = -viewZ;  // with m[2][3]=-1, clip.w = -pos.z
+				printf("  first tile: world-cam delta=(%.1f, %.1f, %.1f) viewZ=%.2f clipW=%.2f\n",
+				       worldX, worldY, worldZ, viewZ, clipW);
+				if (clipW > 0.0f && clipW < 100.0f) {
+					// Compute NDC x/y for a point at the tile's world position (treating it as a vertex)
+					float clipX = viewBasis[0][0]*worldX + viewBasis[0][1]*worldY + viewBasis[0][2]*worldZ;
+					float clipY = viewBasis[1][0]*worldX + viewBasis[1][1]*worldY + viewBasis[1][2]*worldZ;
+					clipX *= proj[0][0]; clipY *= proj[1][1];
+					printf("    NDC (tile center approx): x=%.4f y=%.4f (outside [-1,1] = off-screen)\n",
+					       clipX/clipW, clipY/clipW);
+				}
+			}
+			// Print the first tile model's local vertex bbox
+			if (cmds[0].mesh) {
+				const SVECTOR* verts = (const SVECTOR*)((const unsigned char*)cmds[0].mesh + cmds[0].mesh->vertices);
+				int nv = cmds[0].mesh->num_vertices;
+				short mnX=32767, mxX=-32768, mnY=32767, mxY=-32768, mnZ=32767, mxZ=-32768;
+				for (int v = 0; v < nv; v++) {
+					if (verts[v].vx < mnX) mnX = verts[v].vx; if (verts[v].vx > mxX) mxX = verts[v].vx;
+					if (verts[v].vy < mnY) mnY = verts[v].vy; if (verts[v].vy > mxY) mxY = verts[v].vy;
+					if (verts[v].vz < mnZ) mnZ = verts[v].vz; if (verts[v].vz > mxZ) mxZ = verts[v].vz;
+				}
+				printf("  first tile model: %d verts, local bbox x=[%d,%d] y=[%d,%d] z=[%d,%d]\n",
+				       nv, mnX, mxX, mnY, mxY, mnZ, mxZ);
+				float wmnX=(float)mnX+cmds[0].world.t[0], wmxX=(float)mxX+cmds[0].world.t[0];
+				float wmnY=(float)mnY+cmds[0].world.t[1], wmxY=(float)mxY+cmds[0].world.t[1];
+				float wmnZ=(float)mnZ+cmds[0].world.t[2], wmxZ=(float)mxZ+cmds[0].world.t[2];
+				printf("    world bbox: x=[%.1f,%.1f] y=[%.1f,%.1f] z=[%.1f,%.1f]\n", wmnX, wmxX, wmnY, wmxY, wmnZ, wmxZ);
+				float vx1 = viewBasis[0][0]*(wmnX-camPos[0])+viewBasis[0][1]*(wmnY-camPos[1])+viewBasis[0][2]*(wmnZ-camPos[2]);
+				float vx2 = viewBasis[0][0]*(wmxX-camPos[0])+viewBasis[0][1]*(wmxY-camPos[1])+viewBasis[0][2]*(wmxZ-camPos[2]);
+				float vz1 = viewBasis[2][0]*(wmnX-camPos[0])+viewBasis[2][1]*(wmnY-camPos[1])+viewBasis[2][2]*(wmnZ-camPos[2]);
+				float vz2 = viewBasis[2][0]*(wmxX-camPos[0])+viewBasis[2][1]*(wmxY-camPos[1])+viewBasis[2][2]*(wmxZ-camPos[2]);
+				if (vx1>vx2){float t=vx1;vx1=vx2;vx2=t;} if (vz1>vz2){float t=vz1;vz1=vz2;vz2=t;}
+				printf("    view-space bbox: x=[%.1f,%.1f] z=[%.1f,%.1f]\n", vx1, vx2, vz1, vz2);
+			}
+			debugFrame++;
+		}
+	}
 }
+// ---------------------------------------------------------------------------
+// Software renderer backend (for debugging projection). Mirrors the DX11 companion
+// window but uses a simple CPU rasterizer that prints transformed coordinates.
+// ---------------------------------------------------------------------------
+// Shared test-cube wireframe (forward declared so SoftGame_RenderFrame uses it).
+#define TEST_CUBE_VERTS 8
+#define TEST_CUBE_EDGES 12
+static float gTestEdgeNdc[TEST_CUBE_EDGES][4];   // {x0,y0,x1,y1} in NDC
+static int   gTestEdgeVisible[TEST_CUBE_EDGES];
+static void TestCube_WireCompute(float camDist, float cubeScale);
+
+static SoftRenderer* g_softRenderer = NULL;
+static int g_softTried = 0;
+
+static FILE* g_softDebugFile = NULL;
+
+static int SoftGame_EnsureDisplay(void)
+{
+	if (g_softTried) return g_softRenderer != NULL;
+	g_softTried = 1;
+	// Open a debug log file directly (stdout redirection doesn't work reliably).
+	g_softDebugFile = fopen("soft_debug_log.txt", "w");
+	if (g_softDebugFile) {
+		fprintf(g_softDebugFile, "[SoftGame] Log opened\n");
+		fflush(g_softDebugFile);
+	}
+	printf("[SoftGame] Creating software renderer (640x480)...\n");
+	fflush(stdout);
+	g_softRenderer = SoftRenderer_Create(640, 480);
+	if (!g_softRenderer) {
+		printf("[SoftGame] FAILED to create software renderer\n");
+		if (g_softDebugFile) { fprintf(g_softDebugFile, "[SoftGame] FAILED\n"); fflush(g_softDebugFile); }
+		return 0;
+	}
+	printf("[SoftGame] Software renderer created successfully\n");
+	if (g_softDebugFile) { fprintf(g_softDebugFile, "[SoftGame] Renderer created OK\n"); fflush(g_softDebugFile); }
+	return 1;
+}
+
+static void SoftGame_RenderFrame(void)
+{
+	static int softFrameCount = 0;
+	if (!SoftGame_EnsureDisplay()) return;
+	if (softFrameCount >= 1) return;  // Only render once (static test scene).
+	softFrameCount++;
+
+	// In -testcube mode the shared NDC edge table (computed by DrawTestCube in
+	// RenderGame2 before this call) defines the SAME wireframe the psyx LINE_F2
+	// path draws. Render it here so the soft window matches exactly.
+	if (gTestCubeMode) {
+		SoftRenderer_RenderNdcEdges(g_softRenderer, gTestEdgeNdc, gTestEdgeVisible, TEST_CUBE_EDGES);
+		return;
+	}
+
+	// Simple fallback debug box (edge-only shared test) otherwise.
+	TestCube_WireCompute(500.0f, 100.0f);
+	SoftRenderer_RenderNdcEdges(g_softRenderer, gTestEdgeNdc, gTestEdgeVisible, TEST_CUBE_EDGES);
+}
+
 #endif // _WIN32
 
 int ObjectDrawnValue = 0;
 
 // [D] [T]
+// Test cube for soft renderer (loaded from OBJ).
+static MODEL* gTestCubeModel = NULL;
+
+// Compute the cube wireframe NDC edges for a fixed camera at (0,0,-camDist)
+// looking at the origin with identity rotation.
+static void TestCube_WireCompute(float camDist, float cubeScale)
+{
+	// 8 cube corners in [-1,1].
+	static const float c[8][3] = {
+		{ -1, -1, -1 }, {  1, -1, -1 }, {  1,  1, -1 }, { -1,  1, -1 },
+		{ -1, -1,  1 }, {  1, -1,  1 }, {  1,  1,  1 }, { -1,  1,  1 }
+	};
+	static const int edges[TEST_CUBE_EDGES][2] = {
+		{0,1},{1,2},{2,3},{3,0},
+		{4,5},{5,6},{6,7},{7,4},
+		{0,4},{1,5},{2,6},{3,7}
+	};
+
+	// Camera looks down +Z from (0,0,-camDist). This is NOT the game's GTE
+	// projection — it's a simple explicit row-vector perspective shared by both
+	// renderers so their wireframes match exactly.
+	float fovV = 60.0f * 3.14159265f / 180.0f;
+	float f = 1.0f / tanf(fovV * 0.5f);
+
+	float vx[8], vy[8];
+	int   vis[8];
+	for (int i = 0; i < 8; ++i) {
+		float px = c[i][0] * cubeScale;      // world x
+		float py = c[i][1] * cubeScale;      // world y
+		float pz = c[i][2] * cubeScale + camDist; // view z = world.z - camPos.z (camPos.z=-camDist)
+		float clipw = pz;
+		vis[i] = (clipw > 0.001f);
+		if (vis[i]) {
+			vx[i] = (f * px) / clipw;
+			vy[i] = (f * py) / clipw;
+		} else {
+			vx[i] = vy[i] = 0.0f;
+		}
+	}
+
+	for (int e = 0; e < TEST_CUBE_EDGES; ++e) {
+		int a = edges[e][0], b = edges[e][1];
+		gTestEdgeVisible[e] = (vis[a] && vis[b]);
+		gTestEdgeNdc[e][0] = vx[a]; gTestEdgeNdc[e][1] = vy[a];
+		gTestEdgeNdc[e][2] = vx[b]; gTestEdgeNdc[e][3] = vy[b];
+	}
+}
+
+// Draw the shared cube wireframe into the PsyX/GTX renderer (main window) as
+// LINE_F2 primitives, scaling the NDC edges to the current offscreen (screenX
+// x screenY).
+static void DrawTestCubePsyX(void)
+{
+	int screenX, screenY;
+	PsyX_GetScreenSize(&screenX, &screenY);
+
+	// PsyX renders into the 320x240 offscreen; the window is scaled up by GL.
+	int ox = 320, oy = 240;   // offscreen resolution
+	LINE_F2* line = (LINE_F2*)current->primptr;
+	for (int e = 0; e < TEST_CUBE_EDGES; ++e) {
+		if (!gTestEdgeVisible[e]) continue;
+		// NDC [-1,1] -> offscreen pixels (y flipped).
+		int x0 = (int)((gTestEdgeNdc[e][0] + 1.0f) * 0.5f * ox);
+		int y0 = (int)((1.0f - gTestEdgeNdc[e][1]) * 0.5f * oy);
+		int x1 = (int)((gTestEdgeNdc[e][2] + 1.0f) * 0.5f * ox);
+		int y1 = (int)((1.0f - gTestEdgeNdc[e][3]) * 0.5f * oy);
+		setLineF2(line);
+		line->r0 = line->g0 = line->b0 = 255;
+		line->x0 = x0;
+		line->y0 = y0;
+		line->x1 = x1;
+		line->y1 = y1;
+		addPrim(current->ot + 1, line);
+		line++;
+		current->primptr = (unsigned char*)line;
+	}
+	(void)screenX; (void)screenY;
+}
+
+static void DrawTestCube(void)
+{
+	TestCube_WireCompute(500.0f, 100.0f);
+	DrawTestCubePsyX();
+}
+
 void DrawGame(void)
 {
 	// Open the always-on iteration log (idempotent). Writes stereo_iter.log
 	// in the working directory so the renderer codepath is observable.
 	StereoLog_Open();
 
+	{
+		static int drawGameFirstCall = 1;
+		if (drawGameFirstCall) {
+			FILE* f = fopen("drawgame_reached.txt", "w");
+			if (f) { fprintf(f, "DrawGame reached, renderer=%s (id=%d)\n", Renderer_ToName(gRenderer), (int)gRenderer); fclose(f); }
+			drawGameFirstCall = 0;
+		}
+	}
+
 	// --- Renderer backend dispatch (T0.1) ---
 	// The DX11 backend is the default. The dx11 branch probes the DX11 stack and
 	// (T5.2 consumer) also renders the draw-command arena to a companion DX11
 	// window in parallel with the legacy path (A/B). The psyx/gl branches run
 	// the legacy path only.
-	if (Renderer_IsDX11()) {
+	if (Renderer_IsFeedActive()) {
 #if defined(_WIN32)
 		StereoLog_Write("DrawGame: backend=dx11 dx11_available=%d",
 		                Dx11Renderer_Available());
@@ -1852,6 +2157,11 @@ void DrawGame(void)
 	       gStereoMode, NumPlayers, STEREO_DISABLED);
 	StereoDebugLog("DrawGame: Stereo check: (gStereoMode != STEREO_DISABLED)=%d, (NumPlayers == 1)=%d",
 	       (gStereoMode != STEREO_DISABLED), (NumPlayers == 1));
+
+	// Test-cube mode is mono-only: force the psyx path to render a single
+	// image (no per-eye stereo), so it matches the soft/dx11/gl feed.
+	if (gTestCubeMode)
+		gStereoMode = STEREO_DISABLED;
 
 	// Prepare for stereo rendering
 	SVECTOR saved_camera_base = {0, 0, 0, 0};
@@ -1992,6 +2302,13 @@ void DrawGame(void)
 	if (Renderer_IsDX11()) {
 #if defined(_WIN32)
 		Dx11Game_RenderFrame();
+#endif
+	}
+	// Software renderer consumer: render the DrawCommand feed to a debug window
+	// with printed coordinates. Active under -renderer soft.
+	if (Renderer_IsSoft()) {
+#if defined(_WIN32)
+		SoftGame_RenderFrame();
 #endif
 	}
 	if (!FadingScreen)
@@ -2367,6 +2684,21 @@ int redriver2_main(int argc, char** argv)
 			GameType = GAME_TAKEADRIVE;
 			SetState(STATE_GAMELAUNCH);
 		}
+		else if (!strcmp(argv[i], "-testcube"))
+		{
+			gTestCubeMode = 1;
+
+			// -testcube is a self-contained mode: no mission/level is required.
+			// Start the normal launch path (-> GAMELAUNCH -> GAMEINIT -> GAMELOOP),
+			// but State_GameInit and State_GameLoop bypass all level loading and
+			// simulation. gCurrentMissionNumber is a dummy (never actually loaded).
+			SetFEDrawMode();
+			gInFrontend = 0;
+			AttractMode = 0;
+			gCurrentMissionNumber = 1;
+			GameType = GAME_TAKEADRIVE;
+			SetState(STATE_GAMELAUNCH);
+		}
 		else if (!strcmp(argv[i], "-renderer"))
 		{
 			if (argc - i < 2)
@@ -2375,6 +2707,10 @@ int redriver2_main(int argc, char** argv)
 				return -1;
 			}
 			gRenderer = Renderer_FromName(argv[i + 1]);
+			{
+				FILE* f = fopen("renderer_selected.txt", "w");
+				if (f) { fprintf(f, "Renderer selected: %s (id=%d)\n", Renderer_ToName(gRenderer), (int)gRenderer); fclose(f); }
+			}
 			if (strcmp(argv[i + 1], Renderer_ToName(gRenderer)) != 0)
 				printError("Unknown renderer \"%s\", falling back to \"%s\"",
 				       argv[i + 1], Renderer_ToName(gRenderer));
@@ -2653,10 +2989,18 @@ void RenderGame2(int view)
 	int i;
 	int notInDreaAndStevesEvilLair;
 
+	// Test-cube mode: bypass the entire level/mission system and render just
+	// the shared wireframe cube. `current`/`primptr`/`ot` are already set up by
+	// DrawGame before this call.
+	if (gTestCubeMode) {
+		DrawTestCube();
+		return;
+	}
+
 #ifndef PSX
 	// T5.2 terrain/tile feed: reset the per-frame draw-command arena under
 	// `-renderer dx11`. The terrain/tile plot functions populate it in RenderGame2.
-	if (Renderer_IsDX11())
+	if (Renderer_IsFeedActive())
 		DrawCmd_BeginFrame();
 #endif
 
