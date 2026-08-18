@@ -2157,7 +2157,12 @@ static void TestCube_RenderObjFrame(void)
 	if (!gTestObjDumped)
 		gTestObjDumpVerts = 1;
 
-	RenderModel(gTestCubeModel, &identity, &pos, 0, 0, 0, 0);
+	// Draw the cube unshaded. The bypassed loop never runs DrawGame/main.c:1459,
+	// so combointensity would be 0 (black); force a light grey base colour and
+	// PLOT_NO_SHADE makes pc->colour = combo instead of the uninitialised
+	// f4colourTable/planeColours.
+	combointensity = 0x00a0a0a0;
+	RenderModel(gTestCubeModel, &identity, &pos, 0, PLOT_NO_SHADE, 0, 0);
 
 	// Report how many primitive bytes were written into the OT (diagnose a
 	// black screen: 0 means RenderModel emitted nothing at all).
