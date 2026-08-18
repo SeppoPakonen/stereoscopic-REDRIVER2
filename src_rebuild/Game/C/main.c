@@ -194,6 +194,7 @@ int gTestObjDumpVerts = 0;
 
 static int TestCube_LoadAssets(void); // defined later in this file
 static void TestCube_RenderObjFrame(void); // defined later in this file
+static void TestObj_DrawFlatProbe(void); // defined later in this file
 static void TestObj_DumpFrame(void); // defined later in this file
 
 static int WantPause = 0;
@@ -1640,7 +1641,7 @@ static void TestCubeRenderFrame(void)
 	current->primptr = current->primtab;
 
 	if (gTestObjMode)
-		TestCube_RenderObjFrame();
+		TestObj_DrawFlatProbe();
 	else
 		DrawTestCube();
 
@@ -2170,6 +2171,27 @@ static void TestCube_RenderObjFrame(void)
 		int primBytes = (int)((char*)current->primptr - (char*)current->primtab);
 		fprintf(stderr, "[testobj] rof: primBytes=%d\n", primBytes); fflush(stderr);
 	}
+}
+
+// Minimal PSX-poly A/B: draw 6 opaque white flat quads at fixed screen
+// coordinates (no GTE, no camera, no texture). If these show up in the dump,
+// the whole PSX prim->OT->raster pipeline is healthy, and the cube problem is
+// confined to the GTE/coordinate-emission layer instead.
+static void TestObj_DrawFlatProbe(void)
+{
+	POLY_F4* p = (POLY_F4*)current->primptr;
+	const int gw = 40, gh = 40, gx0 = 60, gy0 = 40, gap = 8;
+	for (int i = 0; i < 6; ++i)
+	{
+		int x = gx0 + (i % 3) * (gw + gap);
+		int y = gy0 + (i / 3) * (gh + gap);
+		setPolyF4(p);
+		setRGB0(p, 255, 255, 255);
+		setXYWH(p, x, y, gw, gh);
+		addPrim(current->ot + (1 + i), p);
+		p++;
+	}
+	current->primptr = (unsigned char*)p;
 }
 
 // -testobj debug: read the psyx window back (BEFORE PsyX_EndScene swaps) and
