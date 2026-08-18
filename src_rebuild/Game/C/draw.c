@@ -791,6 +791,17 @@ void PlotBuildingModel(MODEL* model, int rot, _pct* pc)
 		gte_ldv3(&srcVerts[polys->v0], &srcVerts[polys->v1], &srcVerts[polys->v3]);
 		gte_rtpt();
 
+		if (gTestObjDumpVerts) {
+			SVECTOR sv;
+			int sz;
+			gte_stsz(&sz);
+			gte_stsxy(&sv);
+			fprintf(stderr, "[gt] v0=(%d,%d,%d) sz=%d sxy=(%d,%d)\n",
+			        srcVerts[polys->v0].vx, srcVerts[polys->v0].vy, srcVerts[polys->v0].vz,
+			        sz, sv.vx, sv.vy);
+			fflush(stderr);
+		}
+
 		// get culling value
 		gte_nclip();
 		gte_stopz(&opz);
@@ -887,6 +898,17 @@ void PlotBuildingModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 		gte_ldv3(&srcVerts[polys->v0], &srcVerts[polys->v1], &srcVerts[polys->v3]);
 		gte_rtpt();
 
+		if (gTestObjDumpVerts) {
+			SVECTOR sv;
+			int sz;
+			gte_stsz(&sz);
+			gte_stsxy(&sv);
+			fprintf(stderr, "[gt] v0=(%d,%d,%d) sz=%d sxy=(%d,%d)\n",
+			        srcVerts[polys->v0].vx, srcVerts[polys->v0].vy, srcVerts[polys->v0].vz,
+			        sz, sv.vx, sv.vy);
+			fflush(stderr);
+		}
+
 		// get culling value
 		gte_nclip();
 		gte_stopz(&opz);
@@ -970,8 +992,10 @@ void PlotBuildingModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 
 				if (gTestObjDumpVerts) {
 					static int gvN = 0;
-					fprintf(stderr, "[gv] p%d=(%d,%d) (%d,%d) (%d,%d) (%d,%d)\n",
-					        gvN, prims->x0, prims->y0, prims->x1, prims->y1,
+					fprintf(stderr, "[pf] #%d code=%02x rgb=(%d,%d,%d) tpage=%04x clut=%04x\n",
+					        gvN, prims->code, prims->r0, prims->g0, prims->b0, prims->tpage, prims->clut);
+					fprintf(stderr, "[pf] sxy (%d,%d)(%d,%d)(%d,%d)(%d,%d)\n",
+					        prims->x0, prims->y0, prims->x1, prims->y1,
 					        prims->x2, prims->y2, prims->x3, prims->y3);
 					fflush(stderr);
 					if (++gvN >= 8) gTestObjDumpVerts = 0;
@@ -1136,6 +1160,17 @@ void PlotModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 		gte_ldv3(&srcVerts[polys->v0], &srcVerts[polys->v1], &srcVerts[polys->v3]);
 		gte_rtpt();
 
+		if (gTestObjDumpVerts) {
+			SVECTOR sv;
+			int sz;
+			gte_stsz(&sz);
+			gte_stsxy(&sv);
+			fprintf(stderr, "[gt] v0=(%d,%d,%d) sz=%d sxy=(%d,%d)\n",
+			        srcVerts[polys->v0].vx, srcVerts[polys->v0].vy, srcVerts[polys->v0].vz,
+			        sz, sv.vx, sv.vy);
+			fflush(stderr);
+		}
+
 		// get culling value
 		gte_nclip();
 		gte_stopz(&opz);
@@ -1234,8 +1269,10 @@ void PlotModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 
 				if (gTestObjDumpVerts) {
 					static int gvN = 0;
-					fprintf(stderr, "[gv] p%d=(%d,%d) (%d,%d) (%d,%d) (%d,%d)\n",
-					        gvN, prims->x0, prims->y0, prims->x1, prims->y1,
+					fprintf(stderr, "[pf] #%d code=%02x rgb=(%d,%d,%d) tpage=%04x clut=%04x\n",
+					        gvN, prims->code, prims->r0, prims->g0, prims->b0, prims->tpage, prims->clut);
+					fprintf(stderr, "[pf] sxy (%d,%d)(%d,%d)(%d,%d)(%d,%d)\n",
+					        prims->x0, prims->y0, prims->x1, prims->y1,
 					        prims->x2, prims->y2, prims->x3, prims->y3);
 					fflush(stderr);
 					if (++gvN >= 8) gTestObjDumpVerts = 0;
