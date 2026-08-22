@@ -35,17 +35,32 @@ void SoftRenderer_RenderDebugBox(SoftRenderer* sr,
 // Render the draw command feed (all commands). For debugging, prints the first
 // few commands' transformed coordinates to `logFile` (if non-NULL). Rasterizes
 // all visible triangles.
+// fillMode: 0=wireframe only, 1=solid fill only, 2=wireframe + fill overlay
 void SoftRenderer_RenderFeed(SoftRenderer* sr,
-                             const float view[4][4],
-                             const float proj[4][4],
-                             const DrawCommand* cmds,
-                             int numCmds,
-                             FILE* logFile);
+                              const float view[4][4],
+                              const float proj[4][4],
+                              const DrawCommand* cmds,
+                              int numCmds,
+                              FILE* logFile,
+                              int fillMode);
+
+// Dump framebuffer to a PPM file for automated testing.
+void SoftRenderer_DumpFramebuffer(SoftRenderer* sr, const char* filename);
+
+// Analyze center cell pixel content and report whether colored pixels
+// exceed the threshold in the screen center.
+void SoftRenderer_AnalyzeCenter(SoftRenderer* sr, FILE* logFile);
 
 // Draw a shared NDC edge table as a wireframe (used by -testcube so the soft
 // window matches the psyx LINE_F2 wireframe exactly). edges[i] = {x0,y0,x1,y1}
 // in NDC; visible[i] != 0 means draw edge i.
 void SoftRenderer_RenderNdcEdges(SoftRenderer* sr, const float edges[][4], const int* visible, int count);
+
+// Draw opaque white quads at fixed screen coords (used by -testobj so the soft
+// window shows the SAME flat-quad layout as the psyx window - a pipeline A/B
+// with no GTE/projection involved). rects[i] = {x,y,w,h} (relative to a 320x240
+// virtual screen; this renderer may scale it to its own window); clears black.
+void SoftRenderer_RenderFlatRects(SoftRenderer* sr, const int* rects, int count);
 
 #ifdef __cplusplus
 }

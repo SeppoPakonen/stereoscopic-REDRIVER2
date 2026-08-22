@@ -179,13 +179,13 @@ RendererId gRenderer = RENDERER_DX11;
 int gTestCubeMode = 0;
 
 // Variant of -testcube that renders the OBJ/MTL/PNG test cube (loaded by
-// TestCube_LoadAssets) through the real RenderModel/GTE path (textured), not
+// TestCube_LoadAssets) through the real gTestCubeModel/GTE path (textured), not
 // the shared NDC wireframe. Enabled via -testobj.
 int gTestObjMode = 0;
 
 static int gTestObjDumped = 0; // -testobj: only dump the psyx frame once
 
-// -testobj sets this so RenderModel's PlotFeed branch is skipped (the feed arena
+// -testobj sets this so gTestCubeModel's PlotFeed branch is skipped (the feed arena
 // is not driven by the bypassed test loop; the texture comes from psyx GTE).
 int gSkipRenderFeedTest = 0;
 
@@ -193,7 +193,7 @@ int gSkipRenderFeedTest = 0;
 int gTestObjDumpVerts = 0;
 
 static int TestCube_LoadAssets(void); // defined later in this file
-static void TestCube_RenderObjFrame(void); // defined later in this file
+static void DrawTestCubePsyX(void); // defined later in this file
 static void TestObj_DrawFlatProbe(void); // defined later in this file
 static void TestObj_DumpFrame(void); // defined later in this file
 
@@ -1994,6 +1994,19 @@ static int   gTestEdgeVisible[TEST_CUBE_EDGES];
 static void TestCube_WireCompute(float camDist, float cubeScale);
 
 static SoftRenderer* g_softRenderer = NULL;
+
+// Shared flat-quad layout for the -testobj pipeline A/B: 6 opaque white quads,
+// coords relative to a 320x240 virtual screen. The psyx window draws them
+// directly and the soft window scales them (SoftRenderer_RenderFlatRects), so
+// both backends show the SAME flat-quad picture (no GTE/projection involved).
+static const int gTestFlatRects[6 * 4] = {
+	60, 40, 40, 40,
+	108, 40, 40, 40,
+	156, 40, 40, 40,
+	60, 88, 40, 40,
+	108, 88, 40, 40,
+	156, 88, 40, 40,
+};
 static int g_softTried = 0;
 
 static FILE* g_softDebugFile = NULL;
@@ -2033,6 +2046,12 @@ static void SoftGame_RenderFrame(void)
 	// path draws. Render it here so the soft window matches exactly.
 	if (gTestCubeMode) {
 		SoftRenderer_RenderNdcEdges(g_softRenderer, gTestEdgeNdc, gTestEdgeVisible, TEST_CUBE_EDGES);
+		return;
+	}
+
+	// -testobj: draw the SAME 6 flat quads as the psyx window (pipeline A/B).
+	if (gTestObjMode) {
+		SoftRenderer_RenderFlatRects(g_softRenderer, gTestFlatRects, 6);
 		return;
 	}
 
@@ -2109,11 +2128,11 @@ static int TestCube_LoadAssets(void)
 
 // Render the loaded OBJ cube in world space via the game path. Initialises the
 // GTE test camera (identity world->camera rotation, camera at the origin, cube
-// +Z 500 ahead) so RenderModel/PlotModelSubdivNxN can project, then draws the
-// cube textured into the psyx OT. gSkipRenderFeedTest disables RenderModel's
+// +Z 500 ahead) so gTestCubeModel/PlotModelSubdivNxN can project, then draws the
+// cube textured into the psyx OT. gSkipRenderFeedTest disables gTestCubeModel's
 // PlotFeed branch (the bypassed test loop never drives the DrawCommand feed).
 // Feed rendering of the cube is a separate follow-up.
-static void TestCube_RenderObjFrame(void)
+static void DrawTestCubePsyX(void)
 {
 	if (!gTestCubeModel) return;
 
@@ -2144,7 +2163,7 @@ static void TestCube_RenderObjFrame(void)
 	SetGeomScreen(scr_z);
 
 	// The bypassed test loop does not drive the DrawCommand feed arena, so skip
-	// RenderModel's PlotFeed branch and draw textured through the psyx GTE path.
+	// gTestCubeModel's PlotFeed branch and draw textured through the psyx GTE path.
 	gSkipRenderFeedTest = 1;
 
 	MATRIX identity;
@@ -2163,10 +2182,10 @@ static void TestCube_RenderObjFrame(void)
 	// PLOT_NO_SHADE makes pc->colour = combo instead of the uninitialised
 	// f4colourTable/planeColours.
 	combointensity = 0x00a0a0a0;
-	RenderModel(gTestCubeModel, &identity, &pos, 0, PLOT_NO_SHADE, 0, 0);
+	gTestCubeModel(gTestCubeModel, &identity, &pos, 0, PLOT_NO_SHADE, 0, 0);
 
 	// Report how many primitive bytes were written into the OT (diagnose a
-	// black screen: 0 means RenderModel emitted nothing at all).
+	// black screen: 0 means gTestCubeModel emitted nothing at all).
 	if (!gTestObjDumped) {
 		int primBytes = (int)((char*)current->primptr - (char*)current->primtab);
 		fprintf(stderr, "[testobj] rof: primBytes=%d\n", primBytes); fflush(stderr);
@@ -2179,15 +2198,27 @@ static void TestCube_RenderObjFrame(void)
 // confined to the GTE/coordinate-emission layer instead.
 static void TestObj_DrawFlatProbe(void)
 {
+	// Full-screen opaque black backdrop so the double buffer never leaks the
+	// stale "Loading configuration..." VRAM content (per-frame clear that the
+	// psyx/soft backends both repaint).
+	{
+		POLY_F4* bg = (POLY_F4*)current->primptr;
+		setPolyF4(bg);
+		setRGB0(bg, 0, 0, 0);
+		setXYWH(bg, 0, 0, 320, SCREEN_H);
+		addPrim(current->ot + (OTSIZE - 2), bg);
+		current->primptr = (unsigned char*)(bg + 1);
+	}
+
+	// The same 6 flat quads as the soft window (via gTestFlatRects).
 	POLY_F4* p = (POLY_F4*)current->primptr;
-	const int gw = 40, gh = 40, gx0 = 60, gy0 = 40, gap = 8;
 	for (int i = 0; i < 6; ++i)
 	{
-		int x = gx0 + (i % 3) * (gw + gap);
-		int y = gy0 + (i / 3) * (gh + gap);
+		int x = gTestFlatRects[i * 4 + 0], y = gTestFlatRects[i * 4 + 1];
+		int w = gTestFlatRects[i * 4 + 2], h = gTestFlatRects[i * 4 + 3];
 		setPolyF4(p);
 		setRGB0(p, 255, 255, 255);
-		setXYWH(p, x, y, gw, gh);
+		setXYWH(p, x, y, w, h);
 		addPrim(current->ot + (1 + i), p);
 		p++;
 	}
@@ -2953,7 +2984,7 @@ int redriver2_main(int argc, char** argv)
 		{
 			// -testobj = -testcube + OBJ/MTL/PNG integration: renders the
 			// loaded cube.obj (textured with cube.png) through the real
-			// RenderModel/GTE path instead of the shared NDC wireframe.
+			// gTestCubeModel/GTE path instead of the shared NDC wireframe.
 			gTestCubeMode = 1;
 			gTestObjMode = 1;
 			SetFEDrawMode();
@@ -3258,7 +3289,7 @@ void RenderGame2(int view)
 	// DrawGame before this call.
 	if (gTestCubeMode) {
 		if (gTestObjMode)
-			TestCube_RenderObjFrame();
+			DrawTestCubePsyX();
 		else
 			DrawTestCube();
 		return;

@@ -1,0 +1,49 @@
+[Psy-X] Initialising Psy-X 2.8
+[Psy-X] Build date: Aug 10 2026:18:15:12
+[Psy-X] GLAD pointers dumped to glad_pointers.txt
+[Psy-X] *Video adapter: NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2 by NVIDIA Corporation
+[Psy-X] *OpenGL version: 3.3.0 NVIDIA 561.17
+[Psy-X] *GLSL version: 3.30 NVIDIA via Cg compiler
+REDRIVER2 8.0 Aug 10 2026 18:21:58 (Release_dev)
+[Psy-X] found sound device: OpenAL Soft
+[Psy-X] PSX SPU effects are supported and initialized
+Performing 'EN' LANG to FONT text check...
+*---LSBD(): successful init---*
+[Psy-X] SDL GameController list:
+[Psy-X]   0 'Logitech F510 Gamepad'
+[Psy-X] No SDL haptics found!
+*---LSBD(): successful init---*
+*---LSBD(): saved memtop---*
+*---LSBD(): saved banktop 12---*
+NewLevel in InitMusic()
+LUMP_TEXTURENAMES: size: 7112
+LUMP_TEXTUREINFO: size: 8360
+LUMP_MODELNAMES: size: 2762
+LUMP_PALLET: size: 15576
+LUMP_MOTIONCAPTURE: size: 2450
+LUMP_MOTIONCAPTURE: size: 2594
+LUMP_MOTIONCAPTURE: size: 2450
+LUMP_MOTIONCAPTURE: size: 2450
+LUMP_MOTIONCAPTURE: size: 2450
+LUMP_MOTIONCAPTURE: size: 2450
+LUMP_MOTIONCAPTURE: size: 2882
+LUMP_MOTIONCAPTURE: size: 2594
+LUMP_MOTIONCAPTURE: size: 3840
+LUMP_MOTIONCAPTURE: size: 3840
+LUMP_MOTIONCAPTURE: size: 3840
+LUMP_MOTIONCAPTURE: size: 240
+LUMP_MOTIONCAPTURE: size: 240
+LUMP_MOTIONCAPTURE: size: 240
+LUMP_CAR_MODELS: size: 123324
+LUMP_MODELS: size: 172716
+LUMP_SPOOLINFO: size: 3084
+LUMP_STRAIGHTS2: size: 21816
+LUMP_CURVES2: size: 4232
+LUMP_JUNCTIONS2_NEW: size: 3028
+LUMP_SUBDIVISION: size: 19392
+LUMP_OVERLAYMAP: size: 21880
+LUMP_CHAIR: size: 4092
+LUMP_LOWDETAILTABLE: size: 4820
+[SoftGame] Creating software renderer (640x480)...
+[SoftGame] Software renderer created successfully
+---- LOG CLOSED ----

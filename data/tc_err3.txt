@@ -1,0 +1,6 @@
+[tc] State_GameInit gTestCubeMode
+[tc] before SetupDrawBuffers
+[tc] after SetupDrawBuffers
+[tc] State_GameInit done -> GAMELOOP
+[tc] TestCubeRenderFrame
+[tc] after DrawTestCube, SwapDrawBuffers

@@ -1,0 +1,1 @@
+22:INCLUDES += -I../Game -I../dependencies/SDL2/include -I../dependencies/openal-soft/include -I../spike -I../dependencies/jpeg -I/usr/local/include/SDL2 -I/usr/local/include -I../PsyCross/include -I../PsyCross/include/psx

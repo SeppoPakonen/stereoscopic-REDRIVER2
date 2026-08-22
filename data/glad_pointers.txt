@@ -1,0 +1,9 @@
+=== GLAD Function Pointers (from glad.h macros) ===
+glViewport: 6db26e20
+glScissor: 6db24770
+glEnable: 6db253a0
+glDisable: 6db25370
+glClear: 6db24fe0
+glBindFramebuffer: 6b78f370
+
+If any are 0x00000000, they were not loaded by GLAD.

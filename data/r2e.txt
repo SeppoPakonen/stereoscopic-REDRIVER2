@@ -1,0 +1,88 @@
+main.c
+../Game/C/main.c: In function 'void InitModelNames()':
+../Game/C/main.c:232:48: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  232 |         gHubcapModelPtr = FindModelPtrWithName("HUBCAP1");
+      |                                                ^~~~~~~~~
+../Game/C/main.c:233:52: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  233 |         gCleanWheelModelPtr = FindModelPtrWithName("CLEANWHEEL");
+      |                                                    ^~~~~~~~~~~~
+../Game/C/main.c:234:51: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  234 |         gFastWheelModelPtr = FindModelPtrWithName("FASTWHEEL");
+      |                                                   ^~~~~~~~~~~
+../Game/C/main.c:235:50: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  235 |         gDamWheelModelPtr = FindModelPtrWithName("DAMWHEEL");
+      |                                                  ^~~~~~~~~~
+../Game/C/main.c:236:50: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  236 |         gPed1HeadModelPtr = FindModelPtrWithName("PEDHEAD1");
+      |                                                  ^~~~~~~~~~
+../Game/C/main.c:237:50: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  237 |         gPed2HeadModelPtr = FindModelPtrWithName("HEAD");
+      |                                                  ^~~~~~
+../Game/C/main.c:238:50: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  238 |         gPed3HeadModelPtr = FindModelPtrWithName("HEAD");
+      |                                                  ^~~~~~
+../Game/C/main.c:239:50: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  239 |         gPed4HeadModelPtr = FindModelPtrWithName("HEAD");
+      |                                                  ^~~~~~
+../Game/C/main.c:243:54: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  243 |         gTrailblazerConeModel = FindModelPtrWithName("GREENCONE");
+      |                                                      ^~~~~~~~~~~
+../Game/C/main.c:244:43: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+  244 |         gBombModel = FindModelPtrWithName("BOMB");
+      |                                           ^~~~~~
+../Game/C/main.c: In function 'void TestCube_RenderObjFrame()':
+../Game/C/main.c:2147:36: warning: invalid conversion from 'unsigned char*' to 'char*' [-fpermissive]
+ 2147 |                 current->primptr = (unsigned char*)(bg + 1);
+      |                                    ^~~~~~~~~~~~~~~~~~~~~~~~
+      |                                    |
+      |                                    unsigned char*
+../Game/C/main.c: In function 'void TestObj_DrawFlatProbe()':
+../Game/C/main.c:2210:36: warning: invalid conversion from 'unsigned char*' to 'char*' [-fpermissive]
+ 2210 |                 current->primptr = (unsigned char*)(bg + 1);
+      |                                    ^~~~~~~~~~~~~~~~~~~~~~~~
+      |                                    |
+      |                                    unsigned char*
+../Game/C/main.c:2225:28: warning: invalid conversion from 'unsigned char*' to 'char*' [-fpermissive]
+ 2225 |         current->primptr = (unsigned char*)p;
+      |                            ^~~~~~~~~~~~~~~~~
+      |                            |
+      |                            unsigned char*
+../Game/C/main.c: In function 'void DrawTestCubePsyX()':
+../Game/C/main.c:2354:28: warning: invalid conversion from 'unsigned char*' to 'char*' [-fpermissive]
+ 2354 |         current->primptr = (unsigned char*)(bg + 1);
+      |                            ^~~~~~~~~~~~~~~~~~~~~~~~
+      |                            |
+      |                            unsigned char*
+../Game/C/main.c:2373:36: warning: invalid conversion from 'unsigned char*' to 'char*' [-fpermissive]
+ 2373 |                 current->primptr = (unsigned char*)line;
+      |                                    ^~~~~~~~~~~~~~~~~~~~
+      |                                    |
+      |                                    unsigned char*
+../Game/C/main.c: In function 'int redriver2_main(int, char**)':
+../Game/C/main.c:2725:17: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+ 2725 |                 "GFX\\SPLASH1P.TIM",
+      |                 ^~~~~~~~~~~~~~~~~~~
+../Game/C/main.c:2732:17: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+ 2732 |                 "GFX\\SPLASH1N.TIM",
+      |                 ^~~~~~~~~~~~~~~~~~~
+../Game/C/main.c:2738:17: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+ 2738 |                 "GFX\\OPM2.TIM",
+      |                 ^~~~~~~~~~~~~~~
+../Game/C/main.c:2739:17: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+ 2739 |                 "GFX\\OPM3.TIM",
+      |                 ^~~~~~~~~~~~~~~
+../Game/C/main.c:2823:25: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+ 2823 |         if (!FileExists("DATA\\FEFONT.BNK") || !FileExists("GFX\\FONT2.FNT"))
+      |                         ^~~~~~~~~~~~~~~~~~
+../Game/C/main.c:2823:60: warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+ 2823 |         if (!FileExists("DATA\\FEFONT.BNK") || !FileExists("GFX\\FONT2.FNT"))
+      |                                                            ^~~~~~~~~~~~~~~~
+At global scope:
+cc1plus.exe: note: unrecognized command-line option '-Wno-4309' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4838' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4101' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4244' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4554' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4996' may have been intended to silence earlier diagnostics
+soft_renderer.c
+Linking REDRIVER2

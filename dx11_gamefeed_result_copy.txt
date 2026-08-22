@@ -1,0 +1,9 @@
+CAR_FEED verts=ok count=ok gt3=ok ft3=ok PASS
+SKY_FEED verts=4 polys=1 PASS
+BILLBOARD_FEED camera=ok
+BILLBOARD_FEED world=ok
+BASIS_FEED yaw-match=ok tilt-applied=ok PASS
+MAP_L left map(229,120)=green MAP_R right map(549,120)=green PASS
+CAR_L left car(108,120)=red CAR_R right car(428,120)=red PASS
+MONO map(458,120)=green car(216,120)=red PASS
+TOTAL_FAILS=0 GAMEFEED=PASS

@@ -1,0 +1,23 @@
+PsyX_GTE.cpp
+PsyX_render.cpp
+../PsyCross/src/render/PsyX_render.cpp:15:9: warning: 'NOMINMAX' redefined
+   15 | #define NOMINMAX
+      |         ^~~~~~~~
+In file included from I:/msys64/mingw32/include/c++/16.1.0/i686-w64-mingw32/bits/c++config.h:733,
+                 from I:/msys64/mingw32/include/c++/16.1.0/cstdlib:46,
+                 from I:/msys64/mingw32/include/c++/16.1.0/stdlib.h:36,
+                 from I:/msys64/mingw32/include/intrin.h:60,
+                 from ../dependencies/SDL2/include/SDL_cpuinfo.h:70,
+                 from ../dependencies/SDL2/include/SDL.h:38,
+                 from ../PsyCross/src/render/../platform.h:19,
+                 from ../PsyCross/src/render/PsyX_render.cpp:3:
+I:/msys64/mingw32/include/c++/16.1.0/i686-w64-mingw32/bits/os_defines.h:45:9: note: this is the location of the previous definition
+   45 | #define NOMINMAX 1
+      |         ^~~~~~~~
+cc1plus.exe: note: unrecognized command-line option '-Wno-4309' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4838' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4101' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4244' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4554' may have been intended to silence earlier diagnostics
+cc1plus.exe: note: unrecognized command-line option '-Wno-4996' may have been intended to silence earlier diagnostics
+Linking PsyCross

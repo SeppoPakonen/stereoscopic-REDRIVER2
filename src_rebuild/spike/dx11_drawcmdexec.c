@@ -56,6 +56,8 @@ static void XformPoint(const float p[4], const float m[4][4], float out[4]) {
 // Frustum cull: transform the 8 bbox corners through world then viewProj (as
 // the VS does) and test the 6 clip planes. Returns 1 if fully outside any.
 static int IsCulled(const Dx11DrawCmdItem *it, const float vp[16]) {
+    // TEMPORARILY DISABLED for debugging — always return 0 (not culled)
+    return 0;
     float mn[3] = { it->bboxMin[0], it->bboxMin[1], it->bboxMin[2] };
     float mx[3] = { it->bboxMax[0], it->bboxMax[1], it->bboxMax[2] };
     float clip[8][4];
@@ -68,6 +70,21 @@ static int IsCulled(const Dx11DrawCmdItem *it, const float vp[16]) {
                 XformPoint(p, (const float (*)[4])it->world, wp);
                 XformPoint(wp, (const float (*)[4])vp, clip[ci++]);
             }
+
+    // DEBUG: print clip coordinates for items with worldT far from origin (frame 1+)
+    static int debugCullCount = 0;
+    if (debugCullCount < 20 && (it->world[3][0] > 1000 || it->world[3][0] < -1000 || it->world[3][2] < -1000)) {
+        printf("      IsCulled debug (worldT=(%.0f,%.0f,%.0f)): clip corners:\n",
+               it->world[3][0], it->world[3][1], it->world[3][2]);
+        for (int i = 0; i < 8; i++) {
+            printf("        corner[%d]: clip=(%.2f,%.2f,%.2f,%.2f) NDC=(%.4f,%.4f,%.4f)\n",
+                   i, clip[i][0], clip[i][1], clip[i][2], clip[i][3],
+                   clip[i][3] != 0 ? clip[i][0]/clip[i][3] : 9999,
+                   clip[i][3] != 0 ? clip[i][1]/clip[i][3] : 9999,
+                   clip[i][3] != 0 ? clip[i][2]/clip[i][3] : 9999);
+        }
+        debugCullCount++;
+    }
 
     // For each plane, count how many corners are outside.
     int outside[6] = { 0, 0, 0, 0, 0, 0 };
@@ -215,6 +232,21 @@ int Dx11DrawCmds_Execute(Dx11DrawCmds *c, ID3D11DeviceContext *ctx) {
             Dx11Res_SetCB(c->res, r->worldSlot, (const float (*)[4])r->item->world);
         if (r->culled)
             ++c->culledCount;
+        // DEBUG: print culling status for first 3 items
+        if (i < 3) {
+            printf("    exec item[%d]: culled=%d bboxMin=(%.1f,%.1f,%.1f) bboxMax=(%.1f,%.1f,%.1f) worldT=(%.1f,%.1f,%.1f)\n",
+                   i, r->culled,
+                   r->item->bboxMin[0], r->item->bboxMin[1], r->item->bboxMin[2],
+                   r->item->bboxMax[0], r->item->bboxMax[1], r->item->bboxMax[2],
+                   r->item->world[3][0], r->item->world[3][1], r->item->world[3][2]);
+            if (i == 0) {
+                // Print world matrix rotation part (to check if rotation is applied)
+                printf("      world matrix rot:\n");
+                printf("        [%.4f %.4f %.4f]\n", r->item->world[0][0], r->item->world[0][1], r->item->world[0][2]);
+                printf("        [%.4f %.4f %.4f]\n", r->item->world[1][0], r->item->world[1][1], r->item->world[1][2]);
+                printf("        [%.4f %.4f %.4f]\n", r->item->world[2][0], r->item->world[2][1], r->item->world[2][2]);
+            }
+        }
     }
 
     // Sort the records (opaque before translucent, etc.).
