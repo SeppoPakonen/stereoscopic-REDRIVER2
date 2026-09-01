@@ -93,7 +93,9 @@ int Dx11ModelAdapter_Submit(Dx11Res *res, Dx11Tex *tex, Dx11DrawCmds *cmds,
             if (v.z > bmax[2]) bmax[2] = v.z;
         }
 
-        // Push indices (tri v0,v1,v2; quad v0,v1,v3 + v0,v3,v2).
+        // Match PsyX's TriangulateQuad output exactly. Its stored vertices are
+        // emitted as (v0,v1,v3) then (v1,v3,v2); this is the PSX quad's native
+        // diagonal and avoids the bow-tie/gap topology.
         unsigned short ind[6];
         int nic;
         int baseI = Dx11Res_IndexCount(res);
@@ -102,7 +104,7 @@ int Dx11ModelAdapter_Submit(Dx11Res *res, Dx11Tex *tex, Dx11DrawCmds *cmds,
             ind[0] = (unsigned short)(baseV + 0);
             ind[1] = (unsigned short)(baseV + 1);
             ind[2] = (unsigned short)(baseV + 3);
-            ind[3] = (unsigned short)(baseV + 0);
+            ind[3] = (unsigned short)(baseV + 1);
             ind[4] = (unsigned short)(baseV + 3);
             ind[5] = (unsigned short)(baseV + 2);
             nic = 6;

@@ -122,6 +122,10 @@ ID3D11Texture2D *Dx11Renderer_GetOffscreenTexture(Dx11Renderer *r, int index);
 void Dx11Renderer_CaptureToBMP(Dx11Renderer *r, ID3D11Texture2D *src,
                                const char *bmpPath, const char *statsPath);
 
+// Counts pixels whose RGB channels are not all zero in a renderer-owned target.
+// Intended for render-path assertions; NULL selects the swapchain backbuffer.
+long Dx11Renderer_CountNonBlackPixels(Dx11Renderer *r, ID3D11Texture2D *src);
+
 // ---------------------------------------------------------------------------
 // Resize
 // ---------------------------------------------------------------------------
@@ -141,6 +145,7 @@ IDXGISwapChain      *Dx11Renderer_GetSwapChain(Dx11Renderer *r);
 ID3D11RenderTargetView *Dx11Renderer_GetBackbufferRTV(Dx11Renderer *r);
 ID3D11RenderTargetView *Dx11Renderer_GetOffscreenRTV(Dx11Renderer *r, int index);
 ID3D11DepthStencilView *Dx11Renderer_GetDSV(Dx11Renderer *r);
+ID3D11DepthStencilView *Dx11Renderer_GetOffscreenDSV(Dx11Renderer *r);
 
 #ifdef __cplusplus
 }

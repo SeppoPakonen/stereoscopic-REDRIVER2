@@ -1,6 +1,8 @@
 #include "driver2.h"
 #include "main.h"
 
+extern int g_dbg_texturelessMode;
+
 #include <stdarg.h>
 #include "ASM/rndrasm.h"
 #include "ASM/d2mapasm.h"
@@ -44,7 +46,6 @@
 #include "dx11_renderer.h"
 #include "gl_renderer.h"
 #include "dx11_gamefeed.h"
-#include "soft_renderer.h"
 #include "engine/obj_loader.h"
 #include "engine/model_builder.h"
 #include "engine/texture_loader.h"
@@ -178,6 +179,9 @@ RendererId gRenderer = RENDERER_DX11;
 // Enabled via -testcube.
 int gTestCubeMode = 0;
 
+// Untextured PSYX primitive probe, enabled with -testflat.
+static int gTestFlatMode = 0;
+
 // Variant of -testcube that renders the OBJ/MTL/PNG test cube (loaded by
 // TestCube_LoadAssets) through the real gTestCubeModel/GTE path (textured), not
 // the shared NDC wireframe. Enabled via -testobj.
@@ -193,9 +197,10 @@ int gSkipRenderFeedTest = 0;
 int gTestObjDumpVerts = 0;
 
 static int TestCube_LoadAssets(void); // defined later in this file
-static void DrawTestCubePsyX(void); // defined later in this file
+static void TestCube_RenderGamePath(void); // defined later in this file
+static void DrawTestObjPsyX(void); // defined later in this file
 static void TestObj_DrawFlatProbe(void); // defined later in this file
-static void TestObj_DumpFrame(void); // defined later in this file
+static void TestCube_DumpPsyXFrame(void); // defined later in this file
 
 static int WantPause = 0;
 static PAUSEMODE PauseMode = PAUSEMODE_PAUSE;
@@ -529,17 +534,14 @@ void State_GameInit(void* param)
 	int i, musicType;
 	char padid;
 
-	// Test-cube mode: bypass the entire level/mission loading. We still set up
-	// the draw buffers so the STATE_GAMELOOP test-cube render loop can
-	// DrawOTag/SwapDrawBuffers correctly, then jump straight to GAMELOOP.
+	// Test-cube mode skips level loading but retains the normal DrawGame path.
 	if (gTestCubeMode)
 	{
 		gameinit = 1;
 		NoPlayerControl = 1;
 		NewLevel = 0;
-		if (gTestObjMode)
-			TestCube_LoadAssets();
 		SetupDrawBuffers();
+		TestCube_LoadAssets();
 		SetDispMask(1);
 		SetState(STATE_GAMELOOP);
 		return;
@@ -1628,53 +1630,16 @@ void CheckForPause(void)
 
 int gMultiStep = 0;
 
-static void DrawTestCube(void);
-static void SoftGame_RenderFrame(void);
-
-// [D] [T]
-// Render one mono test-cube frame (standalone, no level/simulation). Draws the
-// shared wireframe into current->ot, swaps/draws the buffers, presents, and
-// updates the soft window (which draws the same NDC edges).
-static void TestCubeRenderFrame(void)
-{
-	ClearOTagR((u_long*)current->ot, OTSIZE);
-	current->primptr = current->primtab;
-
-	if (gTestObjMode)
-		TestObj_DrawFlatProbe();
-	else
-		DrawTestCube();
-
-	SwapDrawBuffers();
-
-	// -testobj: dump the rendered frame once, before PsyX_EndScene swaps.
-	if (gTestObjMode && !gTestObjDumped) {
-		TestObj_DumpFrame();
-		gTestObjDumped = 1;
-	}
-
-#ifndef PSX
-	if (!FadingScreen)
-		PsyX_EndScene();
-
-#if defined(_WIN32)
-	if (Renderer_IsSoft())
-		SoftGame_RenderFrame();
-#endif
-#endif
-
-	FrameCnt++;
-}
-
 // [D] [T]
 void State_GameLoop(void* param)
 {
 	int cnt;
 
-	// Test-cube mode: standalone mono render loop, no mission/level/simulation.
+	// Skip simulation, but retain DrawGame and RenderGame2 so both backends use
+	// the same render producer and consumers as the actual game.
 	if (gTestCubeMode)
 	{
-		TestCubeRenderFrame();
+		DrawGame();
 		return;
 	}
 
@@ -1831,6 +1796,7 @@ static void Dx11Game_MatPerspectiveRH(float fovY, float aspect, float zn, float 
 
 static void Dx11Game_RenderFrame(void)
 {
+	static int testCubeCaptured = 0;
 	int num = DrawCmd_Count();
 	if (num <= 0)
 		return;
@@ -1904,6 +1870,7 @@ static void Dx11Game_RenderFrame(void)
 		HorizonTextures,
 	};
 
+	const char* bmpOut = (gTestCubeMode && !testCubeCaptured) ? "testcube_dx11.bmp" : NULL;
 	Dx11GameFeed_RenderFrame(g_dx11GameDisplay.ren, g_dx11GameDisplay.res,
 	                         g_dx11GameDisplay.tex, g_dx11GameDisplay.sh,
 	                         g_dx11GameDisplay.cmds, g_dx11GameDisplay.comp,
@@ -1913,9 +1880,11 @@ static void Dx11Game_RenderFrame(void)
 	                         Dx11Game_TexResolve, texture_pages /*tpages*/,
 	                         civ_clut /*car body civ_clut table*/,
 	                         &skyTex /*sky texture tables*/,
-	                         NULL /*bmpOut*/,
+	                         bmpOut,
 	                         NULL /*customView*/,
 	                         (const float(*)[3])viewBasis /*full camera basis*/);
+	if (bmpOut)
+		testCubeCaptured = 1;
 
 	// DEBUG: print camera/basis/projection and a few tile samples on first frame
 	{
@@ -1982,23 +1951,14 @@ static void Dx11Game_RenderFrame(void)
 		}
 	}
 }
-// ---------------------------------------------------------------------------
-// Software renderer backend (for debugging projection). Mirrors the DX11 companion
-// window but uses a simple CPU rasterizer that prints transformed coordinates.
-// ---------------------------------------------------------------------------
-// Shared test-cube wireframe (forward declared so SoftGame_RenderFrame uses it).
+// Legacy test-cube wireframe helpers retained for the diagnostic -testobj code.
 #define TEST_CUBE_VERTS 8
 #define TEST_CUBE_EDGES 12
 static float gTestEdgeNdc[TEST_CUBE_EDGES][4];   // {x0,y0,x1,y1} in NDC
 static int   gTestEdgeVisible[TEST_CUBE_EDGES];
 static void TestCube_WireCompute(float camDist, float cubeScale);
 
-static SoftRenderer* g_softRenderer = NULL;
-
-// Shared flat-quad layout for the -testobj pipeline A/B: 6 opaque white quads,
-// coords relative to a 320x240 virtual screen. The psyx window draws them
-// directly and the soft window scales them (SoftRenderer_RenderFlatRects), so
-// both backends show the SAME flat-quad picture (no GTE/projection involved).
+// Shared flat-quad layout for the -testobj diagnostic probe.
 static const int gTestFlatRects[6 * 4] = {
 	60, 40, 40, 40,
 	108, 40, 40, 40,
@@ -2007,58 +1967,6 @@ static const int gTestFlatRects[6 * 4] = {
 	108, 88, 40, 40,
 	156, 88, 40, 40,
 };
-static int g_softTried = 0;
-
-static FILE* g_softDebugFile = NULL;
-
-static int SoftGame_EnsureDisplay(void)
-{
-	if (g_softTried) return g_softRenderer != NULL;
-	g_softTried = 1;
-	// Open a debug log file directly (stdout redirection doesn't work reliably).
-	g_softDebugFile = fopen("soft_debug_log.txt", "w");
-	if (g_softDebugFile) {
-		fprintf(g_softDebugFile, "[SoftGame] Log opened\n");
-		fflush(g_softDebugFile);
-	}
-	printf("[SoftGame] Creating software renderer (640x480)...\n");
-	fflush(stdout);
-	g_softRenderer = SoftRenderer_Create(640, 480);
-	if (!g_softRenderer) {
-		printf("[SoftGame] FAILED to create software renderer\n");
-		if (g_softDebugFile) { fprintf(g_softDebugFile, "[SoftGame] FAILED\n"); fflush(g_softDebugFile); }
-		return 0;
-	}
-	printf("[SoftGame] Software renderer created successfully\n");
-	if (g_softDebugFile) { fprintf(g_softDebugFile, "[SoftGame] Renderer created OK\n"); fflush(g_softDebugFile); }
-	return 1;
-}
-
-static void SoftGame_RenderFrame(void)
-{
-	static int softFrameCount = 0;
-	if (!SoftGame_EnsureDisplay()) return;
-	if (softFrameCount >= 1) return;  // Only render once (static test scene).
-	softFrameCount++;
-
-	// In -testcube mode the shared NDC edge table (computed by DrawTestCube in
-	// RenderGame2 before this call) defines the SAME wireframe the psyx LINE_F2
-	// path draws. Render it here so the soft window matches exactly.
-	if (gTestCubeMode) {
-		SoftRenderer_RenderNdcEdges(g_softRenderer, gTestEdgeNdc, gTestEdgeVisible, TEST_CUBE_EDGES);
-		return;
-	}
-
-	// -testobj: draw the SAME 6 flat quads as the psyx window (pipeline A/B).
-	if (gTestObjMode) {
-		SoftRenderer_RenderFlatRects(g_softRenderer, gTestFlatRects, 6);
-		return;
-	}
-
-	// Simple fallback debug box (edge-only shared test) otherwise.
-	TestCube_WireCompute(500.0f, 100.0f);
-	SoftRenderer_RenderNdcEdges(g_softRenderer, gTestEdgeNdc, gTestEdgeVisible, TEST_CUBE_EDGES);
-}
 
 #endif // _WIN32
 
@@ -2071,8 +1979,10 @@ static MODEL* gTestCubeModel = NULL;
 // Resolve a file next to the exe: try common data layouts first.
 static int TestCube_FindFile(const char* name, char* out, int outSize)
 {
-	static const char* prefixes[] = { "", "data/", "DRIVER2/data/", "data/data/" };
-	for (int i = 0; i < 4; ++i)
+	static const char* prefixes[] = {
+		"", "data/", "DRIVER2/data/", "data/data/", "../../data/", "src_rebuild/data/"
+	};
+	for (int i = 0; i < (int)(sizeof(prefixes) / sizeof(prefixes[0])); ++i)
 	{
 		snprintf(out, outSize, "%s%s", prefixes[i], name);
 		if (FileExists(out))
@@ -2109,6 +2019,14 @@ static int TestCube_LoadAssets(void)
 	{
 		texture_pages[texSet] = tpage;   // 16-bit page -> no CLUT needed
 		fprintf(stderr, "[testobj] png loaded: %dx%d tpage=0x%04x set=%d\n", tw, th, tpage, texSet); fflush(stderr);
+		{
+			unsigned short samples[3];
+			GR_ReadVRAM(&samples[0], 512, 256, 1, 1);
+			GR_ReadVRAM(&samples[1], 640, 384, 1, 1);
+			GR_ReadVRAM(&samples[2], 767, 511, 1, 1);
+			fprintf(stderr, "[testobj] vram 512,256=%04x 640,384=%04x 767,511=%04x\n",
+			        samples[0], samples[1], samples[2]); fflush(stderr);
+		}
 	}
 	else
 	{
@@ -2126,25 +2044,26 @@ static int TestCube_LoadAssets(void)
 	return gTestCubeModel != NULL;
 }
 
-// Render the loaded OBJ cube in world space via the game path. Initialises the
-// GTE test camera (identity world->camera rotation, camera at the origin, cube
-// +Z 500 ahead) so gTestCubeModel/PlotModelSubdivNxN can project, then draws the
-// cube textured into the psyx OT. gSkipRenderFeedTest disables gTestCubeModel's
-// PlotFeed branch (the bypassed test loop never drives the DrawCommand feed).
-// Feed rendering of the cube is a separate follow-up.
-static void DrawTestCubePsyX(void)
+// Render the fixture via the same RenderModel call used by game producers.
+// PSYX consumes its GTE/OT output; DX11 consumes the DrawCommand it emits.
+static void TestCube_RenderGamePath(void)
 {
+	static int frame = 0;
+	// A normal level frame reaches RenderGame2 with a cleared OT. The standalone
+	// fixture has no level setup, so establish that same per-frame invariant here.
+	ClearOTagR((u_long*)current->ot, OTSIZE);
+	current->primptr = current->primtab;
 	if (!gTestCubeModel) return;
-
-	// Draw a full-screen opaque black backdrop (same as DrawTestCubePsyX) so the
-	// -testobj window doesn't show stale VRAM content ("Loading configuration...").
+	// The fixture draws only a small cube. Clear the active PSX draw page directly
+	// so the double buffer cannot alternate with stale frontend pixels; unlike a
+	// fullscreen polygon this does not write a depth value in front of the cube.
 	{
-		POLY_F4* bg = (POLY_F4*)current->primptr;
-		setPolyF4(bg);
-		setRGB0(bg, 0, 0, 0);
-		setXYWH(bg, 0, 0, 320, SCREEN_H);
-		addPrim(current->ot + (OTSIZE - 2), bg);
-		current->primptr = (unsigned char*)(bg + 1);
+		RECT16 clearRect;
+		clearRect.x = current->draw.clip.x;
+		clearRect.y = current->draw.clip.y;
+		clearRect.w = current->draw.clip.w;
+		clearRect.h = current->draw.clip.h;
+		ClearImage(&clearRect, 0, 0, 0);
 	}
 
 	// Test camera: identity world->camera rotation, camera at origin, cube +Z.
@@ -2161,35 +2080,70 @@ static void DrawTestCubePsyX(void)
 	// already set by SetupDrawBuffers.
 	scr_z = 500;
 	SetGeomScreen(scr_z);
+	{
+		int screenW, screenH;
+		PsyX_GetScreenSize(&screenW, &screenH);
+		FrAng = ratan2(160, (float)scr_z * ((float)screenH / (float)screenW) * 1.35f);
+	}
 
-	// The bypassed test loop does not drive the DrawCommand feed arena, so skip
-	// gTestCubeModel's PlotFeed branch and draw textured through the psyx GTE path.
-	gSkipRenderFeedTest = 1;
+	if (Renderer_IsFeedActive())
+		DrawCmd_BeginFrame();
+	gSkipRenderFeedTest = 0;
+	if (frame == 0)
+		GR_UpdateVRAM();
 
-	MATRIX identity;
-	memset(&identity, 0, sizeof(identity));
-	identity.m[0][0] = identity.m[1][1] = identity.m[2][2] = 4096;
+	// Rotate clockwise when viewed from above. The fixed-point angle range is
+	// one turn per 4096 units; four units per frame is deliberately slow.
+	MATRIX rotation;
+	int yaw = (frame * 4) & 4095;
+	int sinYaw = rsin(yaw), cosYaw = rcos(yaw);
+	memset(&rotation, 0, sizeof(rotation));
+	rotation.m[0][0] = (short)cosYaw;
+	rotation.m[0][2] = (short)sinYaw;
+	rotation.m[1][1] = 4096;
+	rotation.m[2][0] = (short)-sinYaw;
+	rotation.m[2][2] = (short)cosYaw;
 
 	VECTOR pos;
 	pos.vx = 0; pos.vy = 0; pos.vz = 500; pos.pad = 0;  // setup: camera looks down +Z
 
-	// -testobj debug: print emitted prim screen coords once (first frame only).
-	if (!gTestObjDumped)
-		gTestObjDumpVerts = 1;
-
-	// Draw the cube unshaded. The bypassed loop never runs DrawGame/main.c:1459,
-	// so combointensity would be 0 (black); force a light grey base colour and
-	// PLOT_NO_SHADE makes pc->colour = combo instead of the uninitialised
-	// f4colourTable/planeColours.
+	// The isolated fixture has no level lighting setup and has no authored
+	// front-face convention, so use the game's neutral, two-sided model flags.
 	combointensity = 0x00a0a0a0;
-	gTestCubeModel(gTestCubeModel, &identity, &pos, 0, PLOT_NO_SHADE, 0, 0);
-
-	// Report how many primitive bytes were written into the OT (diagnose a
-	// black screen: 0 means gTestCubeModel emitted nothing at all).
-	if (!gTestObjDumped) {
-		int primBytes = (int)((char*)current->primptr - (char*)current->primtab);
-		fprintf(stderr, "[testobj] rof: primBytes=%d\n", primBytes); fflush(stderr);
+	SetupPlaneColours(combointensity);
+	g_dbg_texturelessMode = 0;
+	RenderModel(gTestCubeModel, &rotation, &pos, 0, PLOT_NO_SHADE | PLOT_NO_CULL, 0, 0);
+	{
+		FILE* log = fopen("testcube_frames.log", frame == 0 ? "w" : "a");
+		if (log) {
+			const SVECTOR* verts = GET_MODEL_DATA(SVECTOR, gTestCubeModel, vertices);
+			fprintf(log, "frame=%d renderer=%s commands=%d primBytes=%td\n",
+			        frame, Renderer_ToName(gRenderer), DrawCmd_Count(), current->primptr - current->primtab);
+			fprintf(log, "camera=(%d,%d,%d) scr_z=%d FrAng=%d\n",
+			        camera_position.vx, camera_position.vy, camera_position.vz, scr_z, FrAng);
+			fprintf(log, "inv_camera=[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]\n",
+			        inv_camera_matrix.m[0][0], inv_camera_matrix.m[0][1], inv_camera_matrix.m[0][2],
+			        inv_camera_matrix.m[1][0], inv_camera_matrix.m[1][1], inv_camera_matrix.m[1][2],
+			        inv_camera_matrix.m[2][0], inv_camera_matrix.m[2][1], inv_camera_matrix.m[2][2]);
+			for (int i = 0; i < gTestCubeModel->num_vertices; ++i)
+				fprintf(log, "v%d local=(%d,%d,%d) world=(%d,%d,%d)\n", i,
+				        verts[i].vx, verts[i].vy, verts[i].vz,
+				        verts[i].vx + pos.vx, verts[i].vy + pos.vy, verts[i].vz + pos.vz);
+#if USE_PGXP
+			fprintf(log, "pgxp_sxy0=(%.3f,%.3f,%.3f) sxy1=(%.3f,%.3f,%.3f) sxy2=(%.3f,%.3f,%.3f)\n",
+			        (float)g_FP_SXYZ0.x, (float)g_FP_SXYZ0.y, g_FP_SXYZ0.pz,
+			        (float)g_FP_SXYZ1.x, (float)g_FP_SXYZ1.y, g_FP_SXYZ1.pz,
+			        (float)g_FP_SXYZ2.x, (float)g_FP_SXYZ2.y, g_FP_SXYZ2.pz);
+#endif
+			fclose(log);
+		}
 	}
+	frame++;
+}
+
+static void DrawTestObjPsyX(void)
+{
+	TestCube_RenderGamePath();
 }
 
 // Minimal PSX-poly A/B: draw 6 opaque white flat quads at fixed screen
@@ -2198,6 +2152,9 @@ static void DrawTestCubePsyX(void)
 // confined to the GTE/coordinate-emission layer instead.
 static void TestObj_DrawFlatProbe(void)
 {
+	ClearOTagR((u_long*)current->ot, OTSIZE);
+	current->primptr = current->primtab;
+
 	// Full-screen opaque black backdrop so the double buffer never leaks the
 	// stale "Loading configuration..." VRAM content (per-frame clear that the
 	// psyx/soft backends both repaint).
@@ -2207,7 +2164,7 @@ static void TestObj_DrawFlatProbe(void)
 		setRGB0(bg, 0, 0, 0);
 		setXYWH(bg, 0, 0, 320, SCREEN_H);
 		addPrim(current->ot + (OTSIZE - 2), bg);
-		current->primptr = (unsigned char*)(bg + 1);
+		current->primptr = (char*)(bg + 1);
 	}
 
 	// The same 6 flat quads as the soft window (via gTestFlatRects).
@@ -2222,18 +2179,16 @@ static void TestObj_DrawFlatProbe(void)
 		addPrim(current->ot + (1 + i), p);
 		p++;
 	}
-	current->primptr = (unsigned char*)p;
+	current->primptr = (char*)p;
 }
 
-// -testobj debug: read the psyx window back (BEFORE PsyX_EndScene swaps) and
-// write testobj_frame.bmp + report non-black pixel count, so a truly black
-// screen can be distinguished from a rendered-but-mis-projected cube.
-static void TestObj_DumpFrame(void)
+// Capture the actual PSYX backbuffer after the normal game swap.
+static void TestCube_DumpPsyXFrame(void)
 {
 	int w, h;
 	PsyX_GetScreenSize(&w, &h);
 	if (w <= 0 || h <= 0) {
-		fprintf(stderr, "[testobj] dump: bad screen %dx%d\n", w, h); fflush(stderr);
+		fprintf(stderr, "[testcube] dump: bad screen %dx%d\n", w, h); fflush(stderr);
 		return;
 	}
 
@@ -2253,7 +2208,7 @@ static void TestObj_DumpFrame(void)
 		}
 	}
 
-	FILE* f = fopen("testobj_frame.bmp", "wb");
+	FILE* f = fopen("testcube_psyx.bmp", "wb");
 	if (f) {
 		int rowSize = (w * 3 + 3) & ~3;
 		int dataSize = rowSize * h;
@@ -2276,11 +2231,57 @@ static void TestObj_DumpFrame(void)
 		}
 		free(pad);
 		fclose(f);
-		fprintf(stderr, "[testobj] dump: %dx%d nonblack=%ld/%ld -> testobj_frame.bmp\n",
+		fprintf(stderr, "[testcube] dump: %dx%d nonblack=%ld/%ld -> testcube_psyx.bmp\n",
 		        w, h, nonblack, (long)w * h); fflush(stderr);
 	} else {
-		fprintf(stderr, "[testobj] dump: nonblack=%ld (open bmp failed)\n", nonblack); fflush(stderr);
+		fprintf(stderr, "[testcube] dump: nonblack=%ld (open bmp failed)\n", nonblack); fflush(stderr);
 	}
+
+	// Read the actual default-framebuffer depth after the PSYX draw. Bright pixels
+	// are nearer than the cleared depth, so geometry is visible independently of
+	// its texture/color output.
+	float* depth = (float*)malloc((size_t)w * h * sizeof(float));
+	unsigned char* depthBgr = (unsigned char*)malloc((size_t)w * h * 3);
+	if (depth && depthBgr) {
+		glReadPixels(0, 0, w, h, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
+		for (int y = 0; y < h; ++y) {
+			for (int x = 0; x < w; ++x) {
+				float d = depth[(size_t)(h - 1 - y) * w + x];
+				int value = (int)((1.0f - d) * 255.0f);
+				if (value < 0) value = 0;
+				if (value > 255) value = 255;
+				depthBgr[((size_t)y * w + x) * 3 + 0] = (unsigned char)value;
+				depthBgr[((size_t)y * w + x) * 3 + 1] = (unsigned char)value;
+				depthBgr[((size_t)y * w + x) * 3 + 2] = (unsigned char)value;
+			}
+		}
+		FILE* depthFile = fopen("testcube_psyx_depth.bmp", "wb");
+		if (depthFile) {
+			int rowSize = (w * 3 + 3) & ~3;
+			int dataSize = rowSize * h;
+			unsigned int fileSize = 54 + (unsigned int)dataSize;
+			unsigned char hdr[54] = { 0 };
+			hdr[0]='B'; hdr[1]='M';
+			hdr[2]=(unsigned char)(fileSize&0xFF); hdr[3]=(unsigned char)((fileSize>>8)&0xFF);
+			hdr[4]=(unsigned char)((fileSize>>16)&0xFF); hdr[5]=(unsigned char)((fileSize>>24)&0xFF);
+			hdr[10]=54; hdr[14]=40;
+			hdr[18]=(unsigned char)(w&0xFF); hdr[19]=(unsigned char)((w>>8)&0xFF);
+			hdr[20]=(unsigned char)((w>>16)&0xFF); hdr[21]=(unsigned char)((w>>24)&0xFF);
+			hdr[22]=(unsigned char)(h&0xFF); hdr[23]=(unsigned char)((h>>8)&0xFF);
+			hdr[24]=(unsigned char)((h>>16)&0xFF); hdr[25]=(unsigned char)((h>>24)&0xFF);
+			hdr[26]=1; hdr[28]=24;
+			fwrite(hdr, 1, 54, depthFile);
+			unsigned char* pad = (unsigned char*)calloc((size_t)(rowSize - w * 3), 1);
+			for (int y = h - 1; y >= 0; --y) {
+				fwrite(depthBgr + (size_t)y * w * 3, 1, (size_t)w * 3, depthFile);
+				if (rowSize > w * 3) fwrite(pad, 1, (size_t)(rowSize - w * 3), depthFile);
+			}
+			free(pad);
+			fclose(depthFile);
+		}
+	}
+	free(depth);
+	free(depthBgr);
 
 	free(px);
 	free(bgr);
@@ -2351,7 +2352,7 @@ static void DrawTestCubePsyX(void)
 	setRGB0(bg, 0, 0, 0);
 	setXYWH(bg, 0, 0, 320, SCREEN_H);
 	addPrim(current->ot + (OTSIZE - 2), bg);
-	current->primptr = (unsigned char*)(bg + 1);
+	current->primptr = (char*)(bg + 1);
 
 	int ox = 320, oy = 240;   // offscreen resolution
 	LINE_F2* line = (LINE_F2*)current->primptr;
@@ -2370,7 +2371,7 @@ static void DrawTestCubePsyX(void)
 		line->y1 = y1;
 		addPrim(current->ot + 1, line);
 		line++;
-		current->primptr = (unsigned char*)line;
+		current->primptr = (char*)line;
 	}
 	(void)screenX; (void)screenY;
 }
@@ -2585,15 +2586,16 @@ void DrawGame(void)
 		Dx11Game_RenderFrame();
 #endif
 	}
-	// Software renderer consumer: render the DrawCommand feed to a debug window
-	// with printed coordinates. Active under -renderer soft.
-	if (Renderer_IsSoft()) {
-#if defined(_WIN32)
-		SoftGame_RenderFrame();
-#endif
-	}
-	if (!FadingScreen)
+	if (!FadingScreen) {
+		if (gTestCubeMode) {
+			static int testCubeCaptureRequested = 0;
+			if (!testCubeCaptureRequested) {
+				PsyX_RequestTestCapture();
+				testCubeCaptureRequested = 1;
+			}
+		}
 		PsyX_EndScene();
+	}
 #endif
 
 	FrameCnt++;
@@ -2994,6 +2996,17 @@ int redriver2_main(int argc, char** argv)
 			GameType = GAME_TAKEADRIVE;
 			SetState(STATE_GAMELAUNCH);
 		}
+		else if (!strcmp(argv[i], "-testflat"))
+		{
+			gTestCubeMode = 1;
+			gTestFlatMode = 1;
+			SetFEDrawMode();
+			gInFrontend = 0;
+			AttractMode = 0;
+			gCurrentMissionNumber = 1;
+			GameType = GAME_TAKEADRIVE;
+			SetState(STATE_GAMELAUNCH);
+		}
 		else if (!strcmp(argv[i], "-renderer"))
 		{
 			if (argc - i < 2)
@@ -3284,14 +3297,13 @@ void RenderGame2(int view)
 	int i;
 	int notInDreaAndStevesEvilLair;
 
-	// Test-cube mode: bypass the entire level/mission system and render just
-	// the shared wireframe cube. `current`/`primptr`/`ot` are already set up by
-	// DrawGame before this call.
+	// Test-cube mode retains the game's render path, substituting only its scene
+	// producer with one MODEL fixture.
 	if (gTestCubeMode) {
-		if (gTestObjMode)
-			DrawTestCubePsyX();
+		if (gTestFlatMode)
+			TestObj_DrawFlatProbe();
 		else
-			DrawTestCube();
+			TestCube_RenderGamePath();
 		return;
 	}
 

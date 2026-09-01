@@ -10,6 +10,7 @@
 #include "engine/mdl.h"    // MODEL, PL_POLYFT4, SVECTOR
 #include "libgte.h"        // MATRIX
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +31,15 @@ typedef struct {
     int uv3_uv2;       // (u2 | v2<<8)
     short originalindex;
 } GFCarPoly;
+
+// Keep evaluating the fixture checks so one run reports every broken invariant,
+// then trip a single assertion after the complete diagnostic set is logged.
+static void TestCubeCheck(int *failures, const char *name, int condition) {
+    if (!condition) {
+        fprintf(stderr, "[testcube dx11 assert] FAILED: %s\n", name);
+        ++*failures;
+    }
+}
 
 typedef struct {
     int numFT3; GFCarPoly* pFT3;
@@ -458,6 +468,13 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
     ID3D11DeviceContext *ctx = Dx11Renderer_GetContext(ren);
     int iw = Dx11Renderer_GetInternalWidth(ren), ih = Dx11Renderer_GetInternalHeight(ren);
     int w = Dx11Renderer_GetWindowWidth(ren), h = Dx11Renderer_GetWindowHeight(ren);
+    int testFailures = 0;
+    const int testCube = bmpOut != NULL;
+    if (testCube) {
+        TestCubeCheck(&testFailures, "renderer/context", ren && ctx);
+        TestCubeCheck(&testFailures, "nonempty draw-command list", drawCmds && numCmds > 0);
+        TestCubeCheck(&testFailures, "positive target dimensions", iw > 0 && ih > 0 && w > 0 && h > 0);
+    }
 
     Dx11StereoEye eyes[2] = { DX11STEREO_EYE_LEFT, DX11STEREO_EYE_RIGHT };
 
@@ -466,7 +483,7 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
         Dx11Renderer_BindOffscreen(ren, e);
         float base[4] = { 0, 0, 0, 1 };
         ctx->ClearRenderTargetView(Dx11Renderer_GetOffscreenRTV(ren, e), base);
-        ctx->ClearDepthStencilView(Dx11Renderer_GetDSV(ren),
+        ctx->ClearDepthStencilView(Dx11Renderer_GetOffscreenDSV(ren),
                                    D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
         float view[4][4], vp[4][4];
@@ -537,16 +554,57 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                 Dx11GameFeed_ModelToMesh(dc->mesh, flat, verts, nv, mpolys, np, &ov, &op, tpages);
             }
             Dx11ModelMesh mesh = { verts, ov, mpolys, op };
+            if (testCube) {
+                TestCubeCheck(&testFailures, "mesh conversion produced vertices", ov > 0);
+                TestCubeCheck(&testFailures, "mesh conversion produced polygons", op > 0);
+                TestCubeCheck(&testFailures, "finite mesh vertices",
+                              ov > 0 && isfinite(verts[0].x) && isfinite(verts[0].y) && isfinite(verts[0].z));
+                TestCubeCheck(&testFailures, "sane fixture world translation",
+                              fabsf((float)dc->world.t[0]) < 1000000.0f &&
+                              fabsf((float)dc->world.t[1]) < 1000000.0f &&
+                              fabsf((float)dc->world.t[2]) < 1000000.0f);
+            }
             float world[4][4];
             MatWorldFromGte(&dc->world, world);
+            if (testCube && ov > 0) {
+                float local[4] = { verts[0].x, verts[0].y, verts[0].z, 1.0f };
+                float worldPos[4] = {}, clip[4] = {};
+                for (int col = 0; col < 4; ++col)
+                    for (int row = 0; row < 4; ++row)
+                        worldPos[col] += local[row] * world[row][col];
+                for (int col = 0; col < 4; ++col)
+                    for (int row = 0; row < 4; ++row)
+                        clip[col] += worldPos[row] * vp[row][col];
+                TestCubeCheck(&testFailures, "finite clip coordinates",
+                              isfinite(clip[0]) && isfinite(clip[1]) && isfinite(clip[2]) && isfinite(clip[3]));
+                TestCubeCheck(&testFailures, "fixture vertex lies within clip screen bounds",
+                              clip[3] > 0.0f && fabsf(clip[0]) <= clip[3] && fabsf(clip[1]) <= clip[3]);
+            }
             int submitted = 0;
             Dx11ModelAdapter_Submit(res, tex, cmds, &mesh, world, texUser, texResolve, &submitted);
+            if (testCube) {
+                TestCubeCheck(&testFailures, "adapter submitted every polygon", submitted == op);
+                TestCubeCheck(&testFailures, "arena has vertices and indices",
+                              Dx11Res_VertexCount(res) > 0 && Dx11Res_IndexCount(res) > 0);
+            }
             free(mpolys);
             free(verts);
         }
 
-        Dx11DrawCmds_Execute(cmds, ctx);
+        int draws = Dx11DrawCmds_Execute(cmds, ctx);
+        if (testCube) {
+            TestCubeCheck(&testFailures, "executor received commands", Dx11DrawCmds_SubmittedCount(cmds) > 0);
+            TestCubeCheck(&testFailures, "executor emitted draw call", draws > 0 && Dx11DrawCmds_DrawCallCount(cmds) > 0);
+            TestCubeCheck(&testFailures, "eye target contains color",
+                          Dx11Renderer_CountNonBlackPixels(ren, Dx11Renderer_GetOffscreenTexture(ren, e)) > 0);
+        }
     }
+
+    // Capture the first eye separately for the standalone fixture, so a black
+    // final BMP can be attributed to either the eye draw or the composite pass.
+    if (bmpOut)
+        Dx11Renderer_CaptureToBMP(ren, Dx11Renderer_GetOffscreenTexture(ren, 0),
+                                  "testcube_dx11_eye.bmp", NULL);
 
     // Composite the two eye RTs into the backbuffer and capture.
     Dx11Renderer_BindBackbuffer(ren);
@@ -558,6 +616,11 @@ int Dx11GameFeed_RenderFrame(Dx11Renderer *ren, Dx11Res *res, Dx11Tex *tex,
                             w, h);
     if (bmpOut)   // optional: the in-game consumer passes NULL (no per-frame BMP)
         Dx11Renderer_CaptureToBMP(ren, NULL, bmpOut, NULL);
+    if (testCube) {
+        TestCubeCheck(&testFailures, "composite backbuffer contains color",
+                      Dx11Renderer_CountNonBlackPixels(ren, NULL) > 0);
+        assert(testFailures == 0);
+    }
     Dx11Renderer_Present(ren);
     return 0;
 }

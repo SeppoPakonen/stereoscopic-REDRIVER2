@@ -20,8 +20,8 @@
 // t0/s0 = texture/sampler).
 // ---------------------------------------------------------------------------
 static const char *kVS = R"(
-cbuffer ViewProj : register(b0) { float4x4 viewProj; };
-cbuffer World : register(b1) { float4x4 world; };
+cbuffer ViewProj : register(b0) { row_major float4x4 viewProj; };
+cbuffer World : register(b1) { row_major float4x4 world; };
 struct VSIn { float3 pos : POSITION; float4 col : COLOR; float2 uv : TEXCOORD; };
 struct VSOut { float4 pos : SV_Position; float4 col : COLOR; float2 uv : TEXCOORD; };
 VSOut main(VSIn i) {

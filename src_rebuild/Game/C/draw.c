@@ -815,7 +815,7 @@ void PlotBuildingModel(MODEL* model, int rot, _pct* pc)
 			pc->colour = pc->f4colourTable[r - polys->th & 31];
 		}
 
-		if (opz > 0)
+		if (opz > 0 || (pc->flags & PLOT_NO_CULL))
 		{
 			pc->tpage = (*pc->ptexture_pages)[polys->texture_set];
 			pc->clut = (*pc->ptexture_cluts)[polys->texture_set][polys->texture_id];
@@ -922,7 +922,7 @@ void PlotBuildingModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 			pc->colour = pc->f4colourTable[r - polys->th & 31];
 		}
 
-		if (opz > 0)
+		if (opz > 0 || (pc->flags & PLOT_NO_CULL))
 		{
 			gte_stsz3(&pc->scribble[0], &pc->scribble[1], &pc->scribble[2]);
 
@@ -1197,7 +1197,7 @@ void PlotModelSubdivNxN(MODEL* model, int rot, _pct* pc, int n)
 			pc->colour = pc->f4colourTable[r - polys->th & 31];
 		}
 
-		if (opz > 0)
+		if (opz > 0 || (pc->flags & PLOT_NO_CULL))
 		{
 			gte_stsz3(&pc->scribble[0], &pc->scribble[1], &pc->scribble[2]);
 

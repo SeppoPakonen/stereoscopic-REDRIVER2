@@ -45,6 +45,10 @@ struct Dx11Renderer {
     ID3D11Texture2D        *depthTex;
     ID3D11DepthStencilView *dsv;
 
+    // Shared depth/stencil for the sequential left/right internal eye passes.
+    ID3D11Texture2D        *offDepthTex;
+    ID3D11DepthStencilView *offDSV;
+
     // Internal-resolution offscreen RTs (a left/right pair for stereo).
     ID3D11Texture2D        *offTex[DX11R_OFFSCREEN_COUNT];
     ID3D11RenderTargetView *offRTV[DX11R_OFFSCREEN_COUNT];
@@ -242,6 +246,19 @@ static int CreateOffscreenTargets(Dx11Renderer *r) {
         if (FAILED(hr)) { Dx11Fail("CreateShaderResourceView(offscreen) failed", hr); return 0; }
     }
 
+    D3D11_TEXTURE2D_DESC dd = {};
+    dd.Width = (UINT)r->internalW;
+    dd.Height = (UINT)r->internalH;
+    dd.MipLevels = 1;
+    dd.ArraySize = 1;
+    dd.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    dd.SampleDesc.Count = 1;
+    dd.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    HRESULT hr = r->dev->CreateTexture2D(&dd, NULL, &r->offDepthTex);
+    if (FAILED(hr)) { Dx11Fail("CreateTexture2D(offscreen depth) failed", hr); return 0; }
+    hr = r->dev->CreateDepthStencilView(r->offDepthTex, NULL, &r->offDSV);
+    if (FAILED(hr)) { Dx11Fail("CreateDepthStencilView(offscreen) failed", hr); return 0; }
+
     r->offVp = { 0, 0, (FLOAT)r->internalW, (FLOAT)r->internalH, 0.0f, 1.0f };
     return 1;
 }
@@ -286,6 +303,8 @@ void Dx11Renderer_Destroy(Dx11Renderer *r) {
         if (r->offRTV[i]) r->offRTV[i]->Release();
         if (r->offTex[i]) r->offTex[i]->Release();
     }
+    if (r->offDSV) r->offDSV->Release();
+    if (r->offDepthTex) r->offDepthTex->Release();
     if (r->dsv) r->dsv->Release();
     if (r->depthTex) r->depthTex->Release();
     if (r->backRTV) r->backRTV->Release();
@@ -344,7 +363,7 @@ void Dx11Renderer_BindOffscreen(Dx11Renderer *r, int index) {
     if (index < 0 || index >= DX11R_OFFSCREEN_COUNT)
         return;
     ID3D11RenderTargetView *rtv = r->offRTV[index];
-    r->ctx->OMSetRenderTargets(1, &rtv, r->dsv);
+    r->ctx->OMSetRenderTargets(1, &rtv, r->offDSV);
     ApplyViewport(r->ctx, &r->offVp);
 }
 
@@ -468,6 +487,39 @@ void Dx11Renderer_CaptureToBMP(Dx11Renderer *r, ID3D11Texture2D *src,
     if (dbg) fclose(dbg);
 }
 
+long Dx11Renderer_CountNonBlackPixels(Dx11Renderer *r, ID3D11Texture2D *src) {
+    if (!r) return -1;
+    ID3D11Texture2D *back = NULL;
+    if (!src) {
+        if (FAILED(r->swap->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back)))
+            return -1;
+        src = back;
+    }
+    D3D11_TEXTURE2D_DESC td = {};
+    src->GetDesc(&td);
+    td.BindFlags = 0; td.MiscFlags = 0;
+    td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    td.Usage = D3D11_USAGE_STAGING;
+    ID3D11Texture2D *stage = NULL;
+    long count = -1;
+    if (SUCCEEDED(r->dev->CreateTexture2D(&td, NULL, &stage))) {
+        r->ctx->CopyResource(stage, src);
+        D3D11_MAPPED_SUBRESOURCE map = {};
+        if (SUCCEEDED(r->ctx->Map(stage, 0, D3D11_MAP_READ, 0, &map))) {
+            count = 0;
+            for (UINT y = 0; y < td.Height; ++y) {
+                const unsigned char *row = (const unsigned char *)map.pData + (size_t)y * map.RowPitch;
+                for (UINT x = 0; x < td.Width; ++x)
+                    if (row[x * 4] || row[x * 4 + 1] || row[x * 4 + 2]) ++count;
+            }
+            r->ctx->Unmap(stage, 0);
+        }
+        stage->Release();
+    }
+    if (back) back->Release();
+    return count;
+}
+
 Dx11RendererResult Dx11Renderer_Resize(Dx11Renderer *r, int w, int h) {
     if (w <= 0 || h <= 0)
         return DX11R_ERR_BACKBUFFER_RTV;
@@ -502,3 +554,4 @@ ID3D11RenderTargetView *Dx11Renderer_GetOffscreenRTV(Dx11Renderer *r, int index)
     return r->offRTV[index];
 }
 ID3D11DepthStencilView *Dx11Renderer_GetDSV(Dx11Renderer *r)          { return r->dsv; }
+ID3D11DepthStencilView *Dx11Renderer_GetOffscreenDSV(Dx11Renderer *r) { return r->offDSV; }

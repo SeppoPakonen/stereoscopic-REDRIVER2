@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// Free VRAM slot for the debug texture. Row y=256 x∈[512,960) is unused by the
-// level's tpage slots (they end at x=448; the CLUT column lives at x>=960).
+// Free VRAM slot for the debug texture. A 16-bit PSX texture page is 256x256
+// texels, so this occupies x=[512,768), y=[256,512).
 #define TEX_LOADER_VRAM_X 512
 #define TEX_LOADER_VRAM_Y 256
 
@@ -24,11 +24,9 @@ int TextureLoader_LoadPng(const char* filename, unsigned short* outTpage, int* o
 		return 1;
 	}
 
-	// PSX 16-bit pages are 64x64 texels, so downscale the PNG (nearest neighbour)
-	// to fit one page without overflowing the VRAM row (512x512 would run past
-	// the 1024x512 VRAM). If it is already within one page, upload as-is.
-	int tw = w, th = h;
-	if (w > 64 || h > 64) { tw = 64; th = 64; }
+	// A direct-color PSX page is 256x256 texels. Always fill the page so the
+	// model's standard 0..255 page-relative UVs address the uploaded image.
+	int tw = 256, th = 256;
 	unsigned short* px = (unsigned short*)malloc((size_t)tw * th * sizeof(unsigned short));
 	if (!px)
 	{
@@ -37,13 +35,18 @@ int TextureLoader_LoadPng(const char* filename, unsigned short* outTpage, int* o
 	}
 	for (int ty = 0; ty < th; ++ty)
 	{
-		int sy = (ty * h) / th;
+		// PNG rows are top-down while the PSX VRAM texture page is sampled with
+		// its origin at the opposite edge by the PsyX and DX11 page paths.
+		int sy = ((th - 1 - ty) * h) / th;
 		for (int tx = 0; tx < tw; ++tx)
 		{
 			int sx = (tx * w) / tw;
 			const unsigned char* p = &rgba[(sy * w + sx) * 4];
 			unsigned char r = p[0], g = p[1], b = p[2];
-			px[ty * tw + tx] = (unsigned short)((r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10));
+			// RGB555 zero is PSX chroma-key transparency, so preserve opaque PNG
+			// black as an almost-black nonzero texel instead of discarding it.
+			unsigned short color = (unsigned short)((r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10));
+			px[ty * tw + tx] = color ? color : 0x0421;
 		}
 	}
 
@@ -56,6 +59,9 @@ int TextureLoader_LoadPng(const char* filename, unsigned short* outTpage, int* o
 	imageArea.w = tw;
 	imageArea.h = th;
 	LoadImage(&imageArea, (u_long*)px);
+	// LoadImage updates the emulated VRAM command stream. Flush it before the
+	// fixture renders so PsyX's GL VRAM texture sees the uploaded page.
+	DrawSync(0);
 	unsigned short tpage = GetTPage(2, 0, TEX_LOADER_VRAM_X, TEX_LOADER_VRAM_Y);
 
 	stbi_image_free(rgba);
