@@ -47,3 +47,7 @@ src_rebuild/Makefile
 # Launcher build output (U++ bootstrap) and release archives
 /bin/
 /REDRIVER2_Phase3_Release.zip
+.kilo/
+*.dll
+glad_pointers.txt
+shader_compilation_debug.txt
